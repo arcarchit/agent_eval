@@ -1,0 +1,12 @@
+id: code-01
+category: coding
+prompt: "Create solution.py with a function is_palindrome(s: str) -> bool that ignores case and any non-alphanumeric characters."
+grader:
+  type: unit_test
+  test_code: |
+    from solution import is_palindrome
+    assert is_palindrome("A man, a plan, a canal: Panama")
+    assert is_palindrome("")
+    assert is_palindrome("No 'x' in Nixon")
+    assert not is_palindrome("hello")
+    assert not is_palindrome("ab")

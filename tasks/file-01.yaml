@@ -1,0 +1,12 @@
+id: file-01
+category: files
+prompt: "The workspace has sales.csv. Compute the sum of the 'amount' column and write just that number (no other text) to a new file total.txt."
+setup_files:
+  sales.csv: |
+    date,region,amount
+    2025-01-03,north,120.50
+    2025-01-04,south,99.25
+    2025-01-05,north,300.00
+    2025-01-07,east,45.25
+    2025-01-09,west,210.00
+grader: { type: file_check, path: total.txt, number: 775 }

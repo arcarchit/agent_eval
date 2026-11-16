@@ -1,0 +1,9 @@
+id: judge-01
+category: writing
+prompt: "Explain to a 10-year-old why the sky is blue, in at most 3 sentences."
+grader:
+  type: llm_judge
+  rubric: |
+    1. It is at most 3 sentences.
+    2. It says sunlight contains many colours and blue light is scattered more by the air (no factual errors).
+    3. The language is simple enough for a 10-year-old (no unexplained jargon like "Rayleigh" without explanation).

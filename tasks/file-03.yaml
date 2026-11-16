@@ -1,0 +1,7 @@
+id: file-03
+category: files
+prompt: "Create a file config.json containing a JSON object with key \"name\" set to \"evals\", key \"version\" set to the number 2, and key \"tags\" set to the list [\"ai\", \"test\"]."
+grader:
+  type: file_check
+  path: config.json
+  json_equals: { name: evals, version: 2, tags: [ai, test] }

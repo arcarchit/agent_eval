@@ -1,0 +1,17 @@
+# Model registry. Every model is reached through an OpenAI-compatible chat API.
+# Adding a model = adding an entry here. Prices are USD per 1M tokens; check them on
+# https://openrouter.ai/models before quoting costs (assumption: prices as of writing).
+judge_model: gpt-4o-mini   # model used by the llm_judge grader
+
+models:
+  gpt-4o-mini:
+    provider_model: openai/gpt-4o-mini
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.15, output: 0.60 }
+
+  llama-3.3-70b:                      # open-weight model, different provider
+    provider_model: meta-llama/llama-3.3-70b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.13, output: 0.40 }

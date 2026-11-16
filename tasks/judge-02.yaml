@@ -1,0 +1,17 @@
+id: judge-02
+category: writing
+prompt: "Read incident.txt and summarize the incident in exactly 3 bullet points: what happened, the root cause, and the fix."
+setup_files:
+  incident.txt: |
+    On 2025-05-02 between 14:05 and 14:50 UTC, checkout requests failed for about 30% of users.
+    Investigation showed that a config deploy at 14:03 lowered the payment service DB connection pool
+    from 50 to 5 connections. Under normal afternoon traffic the pool was exhausted and requests timed out.
+    The on-call engineer rolled back the config at 14:47. A CI check now blocks pool sizes below 20.
+grader:
+  type: llm_judge
+  rubric: |
+    1. Exactly 3 bullet points.
+    2. Mentions checkout failures (~30% of users, ~45 minutes).
+    3. Root cause: a config change shrank the DB connection pool (50 -> 5), exhausting it.
+    4. Fix: config rollback, plus the CI check preventing small pool sizes.
+    5. No invented facts.

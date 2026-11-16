@@ -1,0 +1,5 @@
+id: skill-03
+category: skill
+needs: skill:acme-billing
+prompt: "Which ACME fiscal quarter does 2026-01-15 fall in? Reply with only the quarter in ACME notation."
+grader: { type: exact, expected: "FY25-Q4" }

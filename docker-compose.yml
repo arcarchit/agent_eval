@@ -1,0 +1,14 @@
+services:
+  evals:
+    build: .
+    ports: ["3000:3000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-4}
+    volumes:
+      - ./data:/app/data            # SQLite database survives restarts
+      - ./tasks:/app/tasks:ro       # edit tasks without rebuilding
+      - ./skills:/app/skills:ro
+      - ./models.yaml:/app/models.yaml:ro

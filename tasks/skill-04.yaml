@@ -1,0 +1,8 @@
+id: skill-04
+category: skill
+needs: skill:acme-billing
+prompt: "Create invoice.json for ACME customer 'Umbrella', invoice sequence 31, issued 2024-07-09, with line amounts $19.99, $5.01 and $100.00. Follow the ACME invoice JSON schema exactly."
+grader:
+  type: file_check
+  path: invoice.json
+  json_equals: { invoice_id: ACME-24-UMB-0031, customer: Umbrella, total_cents: 12500, currency: USD }

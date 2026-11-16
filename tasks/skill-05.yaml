@@ -1,0 +1,12 @@
+id: skill-05
+category: skill
+needs: skill:acme-style
+prompt: "Write the email body (no subject line) to ACME customer Dana Reyes telling her that her refund is delayed by 3 business days because of a bank holiday. Follow the ACME customer email style guide."
+grader:
+  type: llm_judge
+  rubric: |
+    1. The first line is exactly "Hi Dana," (first name only).
+    2. The words "unfortunately" and "sorry" do not appear anywhere.
+    3. It states the delay of 3 business days.
+    4. The last line is exactly "— The ACME Team".
+    5. The tone is polite and professional.

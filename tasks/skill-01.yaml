@@ -1,0 +1,5 @@
+id: skill-01
+category: skill
+needs: skill:acme-billing
+prompt: "Generate the ACME invoice ID for customer 'Globex', invoice sequence number 7, issued on 2025-03-14. Reply with only the ID."
+grader: { type: exact, expected: "ACME-25-GLO-0007" }

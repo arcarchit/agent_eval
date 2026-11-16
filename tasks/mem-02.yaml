@@ -1,0 +1,7 @@
+id: mem-02
+category: memory
+needs: memory
+memory_setup:
+  - "Please remember for future conversations: my name is Priya and I always want answers in metric units."
+prompt: "Reply in the form name/units with my name and my preferred unit system, all lowercase, nothing else."
+grader: { type: exact, expected: "priya/metric" }
