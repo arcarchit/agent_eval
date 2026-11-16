@@ -6,6 +6,7 @@ Evaluate any **harness** (Hermes Agent, a baseline tool loop, …) running with 
 - `PLAN.md`: the build plan and what to say about each step
 - `docs/DESIGN.md`: architecture, interfaces, data model, statistics, known limits, cost
 - `docs/EXPERIMENT.md`: the real experiment (Hermes with skills on vs off)
+- `docs/DECISIONS.md`: options considered, trade-offs and criteria for each design decision
 
 ## Run it
 
