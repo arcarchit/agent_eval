@@ -7,6 +7,7 @@ Evaluate any **harness** (Hermes Agent, a baseline tool loop, …) running with 
 - `docs/DESIGN.md`: architecture, interfaces, data model, statistics, known limits, cost
 - `docs/EXPERIMENT.md`: the real experiment (Hermes with skills on vs off)
 - `docs/JUDGE_VALIDATION.md`: a real judge instability found in the first run, and the fix (before/after)
+- `docs/LEARNING_NOTES.md`: every question asked while building this, with answers (stack, request flow, isolation, models)
 - `docs/DECISIONS.md`: options considered, trade-offs and criteria for each design decision
 
 ## Run it
@@ -92,7 +93,8 @@ No restart is needed: the API reads tasks when an experiment starts, and stores 
 
 ## How to add a model
 
-Add an entry to `models.yaml`. Any OpenAI-compatible endpoint works: OpenRouter, a local vLLM or Ollama, LiteLLM.
+Add an entry to `models.yaml`. Any OpenAI-compatible endpoint works: OpenRouter, xAI (Grok), Groq, a local vLLM or Ollama, LiteLLM.
+`models.yaml` already has commented-out examples for Grok, Groq and Ollama, and three free OpenRouter models (verify their IDs).
 
 ```yaml
   my-model:

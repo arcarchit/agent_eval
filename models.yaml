@@ -17,6 +17,40 @@ models:
     api_key_env: OPENROUTER_API_KEY
     price_per_mtok: { input: 0.13, output: 0.40 }
 
+  # ---- Free models on OpenRouter ($0, but rate-limited per day/minute; a rate-limited trial is retried,
+  # then ends as "error"). Hermes needs tool calling: on openrouter.ai/models check the model lists "tools".
+  # IDs below were NOT verified from this environment (openrouter.ai was unreachable): check them first.
+  particle-1-free:
+    provider_model: particle-ai/particle-1:free          # ID as given; verify
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  nemotron-3-ultra-free:
+    provider_model: nvidia/nemotron-3-ultra:free         # best guess for "Nemotron 3 Ultra (free)"; verify
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  gemma-4-26b-a4b-free:
+    provider_model: google/gemma-4-26b-a4b-it:free       # best guess for "Gemma 4 26B A4B (free)"; verify
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  # ---- Direct providers (no OpenRouter). Both speak the OpenAI API, so it is config only: uncomment,
+  # put the key in .env, restart. Check the current model names in each provider's docs.
+  # grok:                                   # xAI Grok
+  #   provider_model: grok-4-fast           # verify on docs.x.ai
+  #   base_url: https://api.x.ai/v1
+  #   api_key_env: XAI_API_KEY
+  #   price_per_mtok: { input: 0.2, output: 0.5 }   # check current prices
+  # groq-llama-3.3-70b:                     # Groq (fast hosting of open models, has a free tier)
+  #   provider_model: llama-3.3-70b-versatile
+  #   base_url: https://api.groq.com/openai/v1
+  #   api_key_env: GROQ_API_KEY
+  #   price_per_mtok: { input: 0.59, output: 0.79 }  # check current prices
+
   # Free, local, open-weight option (no API cost): install Ollama on your Mac, `ollama pull qwen3:8b`,
   # then uncomment. From inside Docker the Mac is reachable as host.docker.internal.
   # Small local models call tools less reliably than gpt-4o-mini, so expect lower pass rates and slower runs.

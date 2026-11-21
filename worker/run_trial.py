@@ -25,6 +25,12 @@ from graders import grade  # noqa: E402
 from harnesses import get_harness  # noqa: E402
 
 
+def agent_view(task: dict) -> dict:
+    """What the harness may see: prompt, memory_setup, setup files. Never the grader (expected answer,
+    regex, hidden unit tests, judge rubric), so no adapter can leak it into the agent's context."""
+    return {k: v for k, v in task.items() if k != "grader"}
+
+
 def run(job: dict) -> dict:
     task, config = job["task"], job["config"]
     with tempfile.TemporaryDirectory(prefix="trial-") as tmp:
@@ -36,7 +42,7 @@ def run(job: dict) -> dict:
 
         model = get_model(config["model"])
         start = time.time()
-        trace = get_harness(config["harness"]).run(task, config, model, workspace, home)
+        trace = get_harness(config["harness"]).run(agent_view(task), config, model, workspace, home)
         latency_ms = int((time.time() - start) * 1000)
         result = grade(task, trace, workspace)
 

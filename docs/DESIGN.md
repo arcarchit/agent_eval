@@ -150,6 +150,8 @@ Not implemented: "grader disagreement" (it would need two graders per task). It 
   context compression, so its token counts and latency are not directly comparable with the minimal baseline.
   The baseline `memory_read` events are explicit tool calls, while Hermes reads memory through prompt injection.
   Hermes sees the skill index in its system prompt; the baseline sees skill names in its system prompt.
+- **Grader secrecy**: the harness gets the task without its grader (`agent_view()` in `run_trial.py`), and hidden
+  unit tests are written only after the agent finishes. Filesystem access to `/app/tasks` is the remaining gap (below).
 - **Sandbox**: a temp dir plus a process plus a timeout is **not** a security boundary. Inside Docker your Mac is
   safe, but Hermes' `terminal` and file tools can still reach the container: `/app/tasks` (expected answers, so
   an agent could cheat), the SQLite DB, and environment variables including the API key. Use a container or

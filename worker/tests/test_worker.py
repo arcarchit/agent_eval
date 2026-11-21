@@ -243,3 +243,20 @@ def test_hermes_tool_error_detection():
     assert is_tool_error('{"error": "file not found"}')
     assert is_tool_error("Refusing to write: content looks double-escaped")
     assert not is_tool_error('{"success": true, "content": "Error handling is described here"}')
+
+
+def test_harness_never_sees_the_grader(monkeypatch):
+    import run_trial
+    seen = {}
+
+    class Spy:
+        def run(self, task, config, model, workspace, home):
+            seen.update(task)
+            return Trace(final_answer='{"answer": "215"}')
+
+    monkeypatch.setattr(run_trial, "get_harness", lambda name: Spy())
+    monkeypatch.setattr(run_trial, "get_model", lambda name: MODEL)
+    task = {"id": "t", "prompt": "p", "grader": {"type": "exact", "expected": "215"}}
+    out = run_trial.run({"task": task, "config": {"harness": "spy", "model": "fake"}})
+    assert "grader" not in seen and seen["prompt"] == "p"
+    assert out["passed"]  # grading still uses the full task

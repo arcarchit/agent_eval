@@ -25,7 +25,9 @@ class HermesHarness(Harness):
         os.environ["HERMES_HOME"] = str(hermes_home)
         os.environ["TERMINAL_CWD"] = str(workspace)
         os.chdir(workspace)
-        from run_agent import AIAgent  # import after HERMES_HOME is set
+        # Hermes is installed in its own virtualenv (/opt/hermes/.venv, on PYTHONPATH in Docker), so an
+        # editor using another Python interpreter reports this import as unresolved. It works at runtime.
+        from run_agent import AIAgent  # pyright: ignore[reportMissingImports]  (import after HERMES_HOME is set)
 
         toolsets = list(config.get("tools", []))
         if config.get("memory"):
