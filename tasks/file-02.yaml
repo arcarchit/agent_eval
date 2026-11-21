@@ -1,6 +1,6 @@
 id: file-02
 category: files
-prompt: "How many lines in app.log contain the word ERROR? Reply with only the number."
+prompt: "How many lines in app.log contain the word ERROR? Reply with JSON only, like {\"answer\": \"<number>\"}."
 setup_files:
   app.log: |
     10:00:01 INFO server started

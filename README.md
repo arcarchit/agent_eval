@@ -6,6 +6,7 @@ Evaluate any **harness** (Hermes Agent, a baseline tool loop, …) running with 
 - `PLAN.md`: the build plan and what to say about each step
 - `docs/DESIGN.md`: architecture, interfaces, data model, statistics, known limits, cost
 - `docs/EXPERIMENT.md`: the real experiment (Hermes with skills on vs off)
+- `docs/JUDGE_VALIDATION.md`: a real judge instability found in the first run, and the fix (before/after)
 - `docs/DECISIONS.md`: options considered, trade-offs and criteria for each design decision
 
 ## Run it
@@ -35,6 +36,17 @@ cd api && npm install && npm run build
 PYTHONPATH=/opt/hermes WORKER_CMD="/opt/hermes/.venv/bin/python ../worker/run_trial.py" npm start   # :3000
 cd ui && npm install && npm run dev                                                                  # :5173
 ```
+
+## Try one prompt from the terminal
+
+```bash
+# inside Docker
+docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
+docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes --skills acme-billing --task skill-01 --keep
+```
+It prints every trace event, the final answer, tokens and cost (and the grade when you pass `--task`).
+`--keep` leaves the trial folder on disk and prints its path. Inside it, `home/hermes/` is Hermes' private
+home for that trial (`memories/MEMORY.md`, `skills/`, `logs/agent.log`) and `workspace/` holds the files the agent wrote.
 
 ## Tests
 

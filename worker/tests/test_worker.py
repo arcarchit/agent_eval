@@ -98,7 +98,7 @@ def test_baseline_tool_loop(tmp_path):
     assert trace.final_answer == "done"
     assert trace.input_tokens == 20 and trace.steps == 2
     assert [e["type"] for e in trace.events] == [
-        "session_start", "user", "assistant", "tool_call", "tool_result", "assistant"]
+        "session_start", "user", "assistant", "tool_call", "tool_result", "assistant", "session_end"]
 
 
 def test_baseline_blocks_path_escape(tmp_path):
@@ -153,6 +153,93 @@ def test_cohens_kappa():
 def test_judge_uses_rubric_and_parses_verdict():
     from graders import judge
     client = FakeClient([reply('{"reasoning": "all good", "verdict": "pass"}')])
-    res = judge("task", "answer", "rubric text", client=client)
+    res = judge("task", "answer", "rubric text", client=client, votes=1)
     assert res["passed"] and "rubric text" in client.requests[0]["messages"][0]["content"]
     assert client.requests[0]["temperature"] == 0
+
+
+def test_judge_majority_vote_keeps_all_votes():
+    from graders import judge
+    p, f = '{"reasoning": "ok", "verdict": "pass"}', '{"reasoning": "jargon", "verdict": "fail"}'
+    res = judge("t", "a", "r", client=FakeClient([reply(f), reply(p), reply(p)]), votes=3)
+    assert res["passed"] and res["judge_votes"] == [False, True, True]
+    assert res["reasoning"].startswith("[judge votes: 2 pass / 1 fail] ok")
+    res = judge("t", "a", "r", client=FakeClient([reply(f), reply(f), reply(p)]), votes=3)
+    assert not res["passed"] and "jargon" in res["reasoning"]
+
+
+# ---------- JSON answer extraction ----------
+def test_extract_answer():
+    from graders import extract_answer
+    assert extract_answer('{"answer": "215"}') == ("215", "json answer field")
+    assert extract_answer('The trip takes:\n```json\n{"answer": 215}\n```')[0] == "215"
+    assert extract_answer('first {"answer": "1"} then {"answer": "2"}')[0] == "2"   # last one wins
+    assert extract_answer("215") == ("215", "no JSON found, used whole reply")
+    t = Trace(final_answer='Sure! {"answer": "ACME-25-GLO-0007"}')
+    assert grade({"grader": {"type": "exact", "expected": "ACME-25-GLO-0007"}}, t, Path("."))["passed"]
+    t = Trace(final_answer="The trip is 215 minutes.")  # ignored the format: still a fail
+    assert not grade({"grader": {"type": "exact", "expected": "215"}}, t, Path("."))["passed"]
+
+
+# ---------- provider errors are never graded ----------
+def test_baseline_out_of_credits_is_provider_error(tmp_path):
+    import types
+    import openai
+    from common import ProviderError
+
+    class Broke(FakeClient):
+        def create(self, **kw):
+            resp = types.SimpleNamespace(status_code=402, headers={}, request=None)
+            raise openai.APIStatusError("Insufficient credits", response=resp, body=None)
+
+    h = FakeBaseline([])
+    h.client = Broke([])
+    ws, home = dirs(tmp_path)
+    with pytest.raises(ProviderError, match="402"):
+        h.run({"prompt": "p"}, {}, MODEL, ws, home)
+
+
+def fake_hermes(monkeypatch, result: dict):
+    """Replace Hermes' AIAgent with a stub that returns `result` from run_conversation."""
+    import types
+
+    class AIAgent:
+        def __init__(self, **kw):
+            self.valid_tool_names = {"read_file"}
+
+        def run_conversation(self, message):
+            return result
+
+    monkeypatch.setitem(sys.modules, "run_agent", types.SimpleNamespace(AIAgent=AIAgent))
+    monkeypatch.chdir(Path.cwd())  # the adapter chdirs into the workspace; restore afterwards
+    from harnesses.hermes import HermesHarness
+    return HermesHarness()
+
+
+def test_hermes_402_is_provider_error_not_wrong_answer(tmp_path, monkeypatch):
+    from common import ProviderError, RetryableError
+    ws, home = dirs(tmp_path)
+    h = fake_hermes(monkeypatch, {"failed": True, "failure_retryable": False,
+                                  "error": "Billing or credits exhausted: HTTP 402", "final_response": "Billing..."})
+    with pytest.raises(ProviderError, match="402"):
+        h.run({"prompt": "p"}, {}, MODEL, ws, home)
+    h = fake_hermes(monkeypatch, {"failed": True, "failure_retryable": True, "error": "429"})
+    with pytest.raises(RetryableError):
+        h.run({"prompt": "p"}, {}, MODEL, ws, tmp_path / "h2")
+
+
+def test_hermes_loop_guard_and_session_end(tmp_path, monkeypatch):
+    ws, home = dirs(tmp_path)
+    h = fake_hermes(monkeypatch, {"messages": [], "final_response": "", "api_calls": 4,
+                                  "turn_exit_reason": "guardrail_halt"})
+    trace = h.run({"prompt": "p"}, {}, MODEL, ws, home)
+    assert trace.stop_reason == "loop_guard" and classify(trace, False) == "loop"
+    assert trace.events[-1] == {**trace.events[-1], "type": "session_end", "exit_reason": "guardrail_halt"}
+
+
+def test_hermes_tool_error_detection():
+    from harnesses.hermes import is_tool_error
+    assert is_tool_error('{"success": false, "message": "x"}')
+    assert is_tool_error('{"error": "file not found"}')
+    assert is_tool_error("Refusing to write: content looks double-escaped")
+    assert not is_tool_error('{"success": true, "content": "Error handling is described here"}')

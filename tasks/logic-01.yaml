@@ -1,4 +1,4 @@
 id: logic-01
 category: reasoning
-prompt: "Alice is older than Bob. Carol is younger than Bob. Dan is older than Alice. Who is the second oldest? Reply with only the name."
+prompt: "Alice is older than Bob. Carol is younger than Bob. Dan is older than Alice. Who is the second oldest? Reply with JSON only, like {\"answer\": \"<name>\"}."
 grader: { type: exact, expected: "alice" }

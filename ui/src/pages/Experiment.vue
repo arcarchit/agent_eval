@@ -1,7 +1,7 @@
 <!-- One experiment: per-config quality/cost/latency, A-vs-B comparison with CI, per-task matrix,
      and a drill-down into individual trials. Refreshes every 3s while running. -->
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { api, pct, secs, usd } from '../api';
 
 const props = defineProps<{ id: string }>();
@@ -32,7 +32,12 @@ onUnmounted(() => clearInterval(timer));
 async function openCell(task: string, config: string) {
   selected.value = { task, config };
   trials.value = await api(`/experiments/${props.id}/trials?task=${task}&config=${encodeURIComponent(config)}`);
+  // The list renders below the table; scroll to it, or the click looks like it did nothing.
+  await nextTick();
+  document.getElementById('trial-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+const isSelected = (task: string, config: string) => selected.value?.task === task && selected.value?.config === config;
 
 const progress = computed(() => {
   if (!exp.value) return '';
@@ -100,13 +105,14 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
       </div>
     </div>
 
-    <h3>Per-task results (passed / finished) — click a cell to see its trials</h3>
+    <h3>Per-task results (passed / finished) — click a cell to list its trials below, then click a trial</h3>
     <table>
       <tr><th>Task</th><th>Grader</th><th v-for="c in exp.configs" :key="c.id">{{ c.id }}</th></tr>
       <tr v-for="t in exp.tasks" :key="t.id">
         <td>{{ t.id }}</td><td class="muted">{{ t.grader }}</td>
         <td v-for="c in exp.configs" :key="c.id">
-          <a href="#" :class="cellClass(exp.matrix[t.id]?.[c.id])" @click.prevent="openCell(t.id, c.id)">
+          <a href="#" :class="cellClass(exp.matrix[t.id]?.[c.id])" :style="isSelected(t.id, c.id) ? 'font-weight: 700; outline: 2px solid var(--accent); padding: 0 4px' : ''"
+             @click.prevent="openCell(t.id, c.id)">
             {{ exp.matrix[t.id]?.[c.id]?.passed ?? 0 }} / {{ exp.matrix[t.id]?.[c.id]?.done ?? 0 }}
           </a>
           <span v-if="exp.matrix[t.id]?.[c.id]?.error" class="warn"> ({{ exp.matrix[t.id][c.id].error }} err)</span>
@@ -114,7 +120,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
       </tr>
     </table>
 
-    <div class="card" v-if="selected">
+    <div class="card" v-if="selected" id="trial-list">
       <strong>{{ selected.task }} · {{ selected.config }}</strong>
       <table>
         <tr><th>Trial</th><th>Status</th><th>Result</th><th>Failure category</th><th class="num">Cost</th><th class="num">Latency</th><th>Attempts</th></tr>

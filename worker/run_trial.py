@@ -2,7 +2,8 @@
 
 stdin : {"task": {...}, "config": {...}}
 stdout: one JSON line with the result (trace, grade, usage, failure category)
-exit  : 0 = finished (passed or failed), 2 = retryable infra error, 1 = other crash
+exit  : 0 = finished (passed or failed), 2 = retryable infra error (rate limit, 5xx),
+        1 = error that retrying will not fix (out of credits, bad key, crash)
 
 A fresh temp directory per trial gives isolation: the workspace and the harness home
 (memory, skills) are thrown away afterwards.
@@ -18,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import RetryableError, get_model  # noqa: E402
+from common import ProviderError, RetryableError, get_model  # noqa: E402
 from failures import classify  # noqa: E402
 from graders import grade  # noqa: E402
 from harnesses import get_harness  # noqa: E402
@@ -63,6 +64,8 @@ def main():
         out, code = run(job), 0
     except RetryableError as e:
         out, code = {"status": "retryable_error", "error": str(e)}, 2
+    except ProviderError as e:  # e.g. out of credits: not the agent's fault, never graded
+        out, code = {"status": "error", "error": str(e)}, 1
     except Exception as e:
         out, code = {"status": "error", "error": f"{e}\n{traceback.format_exc()[-2000:]}"}, 1
     finally:

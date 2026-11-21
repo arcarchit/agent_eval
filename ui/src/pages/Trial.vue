@@ -11,10 +11,12 @@ onMounted(async () => (t.value = await api('/trials/' + props.id)));
 const label: Record<string, string> = {
   session_start: 'NEW SESSION', user: 'USER', assistant: 'ASSISTANT', tool_call: 'TOOL CALL',
   tool_result: 'TOOL RESULT', memory_read: 'MEMORY READ', memory_write: 'MEMORY WRITE', skill_used: 'SKILL USED',
+  session_end: 'SESSION END',
 };
 const color: Record<string, string> = {
   user: 'var(--accent)', assistant: 'var(--fg)', tool_call: 'var(--warn)', tool_result: 'var(--muted)',
   memory_read: '#a855f7', memory_write: '#a855f7', skill_used: '#0891b2', session_start: 'var(--muted)',
+  session_end: 'var(--muted)',
 };
 </script>
 
@@ -47,6 +49,7 @@ const color: Record<string, string> = {
         <strong :style="{ color: color[e.type] }">{{ label[e.type] ?? e.type }}</strong>
         <span v-if="e.name"> · {{ e.name }}</span>
         <span v-if="e.error" class="error"> · error</span>
+        <span v-if="e.stop_reason" :class="e.stop_reason === 'completed' ? 'muted' : 'warn'"> · {{ e.stop_reason }}</span>
         <pre v-if="e.content">{{ e.content }}</pre>
         <pre v-if="e.arguments" class="muted">{{ e.arguments }}</pre>
         <pre v-if="e.output">{{ e.output }}</pre>

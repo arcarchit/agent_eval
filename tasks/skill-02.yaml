@@ -1,5 +1,5 @@
 id: skill-02
 category: skill
 needs: skill:acme-billing
-prompt: "An ACME invoice of $1,200 was paid 17 days late. What is the late fee in dollars under ACME billing rules? Reply with only the number."
+prompt: "An ACME invoice of $1,200 was paid 17 days late. What is the late fee in dollars under ACME billing rules? Reply with JSON only, like {\"answer\": \"<number>\"}."
 grader: { type: regex, pattern: '^\$?72(\.00?)?$' }

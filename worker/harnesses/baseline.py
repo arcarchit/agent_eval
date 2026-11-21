@@ -9,7 +9,7 @@ from pathlib import Path
 
 import openai
 
-from common import ROOT, Model, RetryableError, Trace
+from common import ROOT, Model, ProviderError, RetryableError, Trace
 from harnesses.base import Harness, sessions
 
 SKILLS_DIR = ROOT / "skills"
@@ -99,6 +99,7 @@ class BaselineHarness(Harness):
             trace.add("session_start", index=i)
             trace.steps, trace.stop_reason = 0, "completed"
             trace.final_answer = self._session(client, model, config, system, message, tools, trace)
+            trace.add("session_end", index=i, stop_reason=trace.stop_reason)
         return trace
 
     def make_client(self, model: Model):  # overridden in tests with a fake client
@@ -114,6 +115,8 @@ class BaselineHarness(Harness):
                     temperature=config.get("temperature", 0.0), max_tokens=config.get("max_tokens", 1024))
             except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
                 raise RetryableError(str(e)) from e
+            except openai.APIStatusError as e:  # 401 bad key, 402 out of credits, 404 unknown model
+                raise ProviderError(f"HTTP {e.status_code}: {e.message}") from e
             trace.steps += 1
             if resp.usage:
                 trace.input_tokens += resp.usage.prompt_tokens

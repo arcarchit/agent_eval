@@ -9,7 +9,7 @@ import os
 import shutil
 from pathlib import Path
 
-from common import ROOT, Model, RetryableError, Trace
+from common import ROOT, Model, ProviderError, RetryableError, Trace
 from harnesses.base import Harness, sessions
 
 SKILLS_DIR = ROOT / "skills"
@@ -49,16 +49,25 @@ class HermesHarness(Harness):
             trace.available_tools = sorted(agent.valid_tool_names) if hasattr(agent, "valid_tool_names") else []
             result = agent.run_conversation(message)
 
-            if result.get("failed") and result.get("failure_retryable"):
-                raise RetryableError(result.get("error") or "hermes provider error")
+            # A failed turn means the model API call itself failed (rate limit, HTTP 402 out of
+            # credits, 5xx, auth). That is infrastructure, not agent behaviour: never grade it.
+            # Retryable ones go back to the runner for backoff; the rest end the trial as "error".
+            if result.get("failed"):
+                error = f"provider error in session {i}: {result.get('error') or result.get('failure_reason')}"
+                if result.get("failure_retryable"):
+                    raise RetryableError(error)
+                raise ProviderError(error)
             self._add_messages(trace, result.get("messages", []))
             trace.input_tokens += result.get("input_tokens") or 0
             trace.output_tokens += result.get("output_tokens") or 0
             trace.steps = result.get("api_calls") or 0
             trace.final_answer = result.get("final_response") or ""
             exit_reason = result.get("turn_exit_reason") or ""
-            trace.stop_reason = ("step_limit" if exit_reason == "budget_exhausted"
-                                 else "error" if result.get("failed") else "completed")
+            trace.stop_reason = {"budget_exhausted": "step_limit",   # hit max_steps
+                                 "guardrail_halt": "loop_guard",     # Hermes stopped a repeating tool loop
+                                 }.get(exit_reason, "completed")
+            # Recorded for every session, so a problem in an earlier (memory_setup) session stays visible.
+            trace.add("session_end", index=i, stop_reason=trace.stop_reason, exit_reason=exit_reason)
         return trace
 
     @staticmethod
@@ -79,8 +88,15 @@ class HermesHarness(Harness):
                         trace.add("skill_used", name=args.get("name"))
             elif m["role"] == "tool":
                 content = str(m.get("content", ""))
-                trace.add("tool_result", name=m.get("name"), output=content[:4000],
-                          error='"success": false' in content or content.startswith("Error"))
+                trace.add("tool_result", name=m.get("name"), output=content[:4000], error=is_tool_error(content))
+
+
+def is_tool_error(content: str) -> bool:
+    """Hermes tools return JSON like {"success": false, ...} or {"error": "..."}, or plain text."""
+    data = _json(content)
+    if isinstance(data, dict) and (data.get("success") is False or data.get("error")):
+        return True
+    return content.lstrip().lower().startswith(("error", "refusing", "failed"))
 
 
 def _json(s):

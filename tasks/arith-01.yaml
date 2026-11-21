@@ -1,4 +1,4 @@
 id: arith-01
 category: reasoning
-prompt: "A train leaves at 09:40 and arrives at 13:15 the same day. How many minutes is the trip? Reply with only the number."
+prompt: "A train leaves at 09:40 and arrives at 13:15 the same day. How many minutes is the trip? Reply with JSON only, like {\"answer\": \"<number>\"}."
 grader: { type: exact, expected: "215" }

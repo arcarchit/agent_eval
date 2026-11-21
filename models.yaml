@@ -2,6 +2,7 @@
 # Adding a model = adding an entry here. Prices are USD per 1M tokens; check them on
 # https://openrouter.ai/models before quoting costs (assumption: prices as of writing).
 judge_model: gpt-4o-mini   # model used by the llm_judge grader
+judge_votes: 5             # ask the judge 5 times, take the majority (temperature 0 is not deterministic)
 
 models:
   gpt-4o-mini:
@@ -15,3 +16,12 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     price_per_mtok: { input: 0.13, output: 0.40 }
+
+  # Free, local, open-weight option (no API cost): install Ollama on your Mac, `ollama pull qwen3:8b`,
+  # then uncomment. From inside Docker the Mac is reachable as host.docker.internal.
+  # Small local models call tools less reliably than gpt-4o-mini, so expect lower pass rates and slower runs.
+  # qwen3-8b-local:
+  #   provider_model: qwen3:8b
+  #   base_url: http://host.docker.internal:11434/v1
+  #   api_key_env: OLLAMA_API_KEY        # Ollama ignores the key; set OLLAMA_API_KEY=ollama in .env
+  #   price_per_mtok: { input: 0, output: 0 }

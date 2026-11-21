@@ -108,6 +108,12 @@
       "answer": "Sunlight is made of many colours and the air scatters the blue part the most, so blue light spreads across the whole sky. That is why we see blue above us.",
       "human_label": "pass",
       "note": "correct, 2 sentences"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "The sky looks blue because of a process called scattering. When sunlight enters the Earth's atmosphere, it hits tiny particles and spreads out in all directions. Blue light is scattered more than other colors because it travels in shorter, smaller waves, making the sky appear blue to our eyes.",
+      "human_label": "pass",
+      "note": "real answer from experiment e181b969; the old rubric gave it 3 pass / 4 fail over 'is scattering jargon?'"
     }
   ]
 }

@@ -67,7 +67,8 @@ Tasks, skills and models are files in git, so they are versioned by git. Hermes 
   LLM sampling is not deterministic, so a rerun reproduces the *setup*, and the statistics tell you whether
   the new numbers agree with the old ones within their CIs.
 - **Failure handling**: concurrency limit (`MAX_CONCURRENCY`); exit code 2 (rate limit or provider 5xx) is retried
-  with exponential backoff and jitter, up to 4 attempts; a timeout kills the process and scores the trial as a
+  with exponential backoff and jitter, up to 4 attempts; a non-retryable provider failure (HTTP 402 out of
+  credits, 401 bad key) ends the trial as `error` immediately and is **never graded**; a timeout kills the process and scores the trial as a
   failure (`timeout`); a crash or exhausted retries gives `status = error`, which is **excluded** from statistics
   and shown as its own count. On API restart, `running` trials go back to `pending` and resume.
 
@@ -75,11 +76,13 @@ Tasks, skills and models are files in git, so they are versioned by git. Hermes 
 
 | Grader | Tasks | Notes |
 |--------|-------|-------|
-| `exact` | 9 | trim, lower-case, strip quotes and a trailing period |
-| `regex` | 2 | when several formats are valid (`$72`, `72.00`) |
+| `exact` | 9 | the prompt asks for `{"answer": ...}`; the grader takes the last JSON `answer` field (falling back to the whole reply), then trims, lower-cases, and strips quotes and a trailing period |
+| `regex` | 2 | same answer extraction; used when several formats are valid (`$72`, `72.00`) |
 | `file_check` | 3 | checks the workspace after the run: number, exact text, or JSON equality |
 | `unit_test` | 4 | the hidden test file is written **after** the agent finishes, then run with Python |
-| `llm_judge` | 3 | rubric where every point must hold, temperature 0, reasoning before the verdict, JSON output |
+| `llm_judge` | 3 | rubric where every point must hold, temperature 0, reasoning before the verdict, JSON output, **majority of 5 votes** (all votes stored) |
+
+**Why JSON answers**: in the first real run, correct answers wrapped in a sentence ("The trip is 215 minutes.") failed exact match. That measured formatting, not the skill. Asking for `{"answer": ...}` and extracting the field keeps grading strict but fair. A reply that ignores the format and is not a bare answer still fails.
 
 **Deterministic graders** are covered by unit tests (`worker/tests`). Every task's expected answer was checked
 by hand or with a script (for example the weekday of 2024-02-29). Ambiguous tasks were rewritten: an earlier
@@ -88,8 +91,10 @@ by hand or with a script (for example the weekday of 2024-02-29). Ambiguous task
 **Judge validation**: `judge_validation/labels.json` has 18 answers (7 pass, 11 fail) for the three judge tasks.
 They include subtle failures: "So sorry!" where "sorry" is banned, a missing CI-check fix, 5 sentences when
 the limit is 3. `worker/judge_validation.py` reports accuracy, Cohen's kappa, false passes and false fails.
-**Acceptance rule**: kappa ≥ 0.8 and no more than 1 false pass, otherwise fix the rubric before trusting judge
-tasks. Run it with your key and paste the numbers into `docs/EXPERIMENT.md`.
+It also reports **instability**: examples where repeated calls on the same input disagreed.
+**Acceptance rule**: kappa ≥ 0.8, at most 1 false pass, and 0 unstable items. Otherwise fix the rubric before
+trusting judge tasks. See `docs/JUDGE_VALIDATION.md` for a real instability found in the first experiment
+(the same answer got 3 passes and 4 fails) and how it was fixed.
 
 ## 6. Statistical method
 
@@ -121,7 +126,8 @@ of a few cents for this experiment.
 
 ## 7. Failure analysis (`worker/failures.py`)
 
-Rules over the trace, first match wins: `timeout`, `step_exhaustion` (hit `max_steps`), `hallucinated_tool`
+Rules over the trace, first match wins: `timeout`, `provider_error` (safety net; such trials should already be
+`error`), `step_exhaustion` (hit `max_steps`), `loop` when the harness's own loop guard stopped it, `hallucinated_tool`
 (called a tool not offered), `bad_tool_args` (arguments not valid JSON), `tool_errors` (most tool calls
 failed), `loop` (same call 3+ times), `gave_up` (empty final answer), `wrong_answer`. The UI shows the counts
 per config, so a regression points to a cause. For example, "skills off → wrong_answer on skill-*" means the
@@ -144,9 +150,16 @@ Not implemented: "grader disagreement" (it would need two graders per task). It 
   context compression, so its token counts and latency are not directly comparable with the minimal baseline.
   The baseline `memory_read` events are explicit tool calls, while Hermes reads memory through prompt injection.
   Hermes sees the skill index in its system prompt; the baseline sees skill names in its system prompt.
-- **Sandbox**: a temp dir plus a process plus a timeout is **not** a security boundary. Hermes' `terminal`
-  toolset can touch the container filesystem. Use a container or microVM per trial before running untrusted tasks.
-- **Rate-limit errors** are excluded rather than imputed. If errors cluster on one config, the comparison can be
+- **Sandbox**: a temp dir plus a process plus a timeout is **not** a security boundary. Inside Docker your Mac is
+  safe, but Hermes' `terminal` and file tools can still reach the container: `/app/tasks` (expected answers, so
+  an agent could cheat), the SQLite DB, and environment variables including the API key. Use a container or
+  microVM per trial, with no secrets and no task files mounted, before running untrusted tasks or treating
+  scores as cheat-proof.
+- **Hermes can edit skills** (`skill_manage` comes with the `skills` toolset). Edits go to the trial's private
+  copy and are thrown away, so they never reach the repo, other trials or the baseline. But *within* a trial,
+  Hermes can use a skill as a notepad: in the first run it saved a memory-task fact as a skill with memory off.
+  So skills-on can leak into memory tasks; exclude `mem-*` from skills experiments.
+- **Provider errors** (rate limits after retries, out of credits) are excluded rather than imputed. If errors cluster on one config, the comparison can be
   biased; the UI shows error counts so this is visible.
 - **Prices** are static numbers in `models.yaml`. Provider-side caching and discounts are ignored.
 - **Single machine**: the in-process queue is not distributed. A crash loses only in-flight trials, which re-run
