@@ -1,149 +1,66 @@
 # Agent Evals Platform
 
-Evaluate any **harness** (Hermes Agent, a baseline tool loop, …) running with any **model**, and answer
-*"did the agent get better, worse, or stay the same, and how sure are we?"* with evidence.
+Evaluate any **agent harness** (Hermes Agent, a baseline tool loop, your own) running with any **model**, and
+answer *"did this change make the agent better, worse, or the same, and how sure are we?"* with evidence.
 
-- `PLAN.md`: the build plan and what to say about each step
-- `docs/DESIGN.md`: architecture, interfaces, data model, statistics, known limits, cost
-- `docs/EXPERIMENT.md`: the real experiment (Hermes with skills on vs off)
-- `docs/JUDGE_VALIDATION.md`: a real judge instability found in the first run, and the fix (before/after)
-- `docs/LEARNING_NOTES.md`: every question asked while building this, with answers (stack, request flow, isolation, models)
-- `docs/DECISIONS.md`: options considered, trade-offs and criteria for each design decision
+- **Compare configs** (harness × model × skills, memory, tools, temperature, budgets) over N repeated trials.
+- **Grade** with exact match, regex, file-state checks, hidden unit tests, or a validated LLM judge.
+- **Trust the verdict**: paired bootstrap confidence intervals, an explicit "this may be noise", per-task deltas,
+  and cost / latency / tokens next to quality.
+- **See why**: the full trajectory of every trial (messages, tool calls, memory, skills, grader reasoning).
+- **Extend**: a new model is a YAML entry; a new harness is one adapter class.
 
-## Run it
-
-```bash
-cp .env.example .env          # put your OPENROUTER_API_KEY in it
-docker compose up --build     # open http://localhost:3000
-```
-
-Then:
-1. **Configs**: create two configs, e.g. `hermes-skills` (harness hermes, skills `acme-billing` + `acme-style`) and
-   `hermes-noskills` (same, no skills).
-2. **Experiments**: tick both configs, set N (trials per task), click Run.
-3. Open the experiment: the pass rate with its 95% CI, the A-vs-B verdict, per-task deltas, cost and latency.
-4. Click a cell in the per-task table, then a trial, to see its full trajectory and why it passed or failed.
-5. Export the results as JSON or CSV with the links at the top of the experiment page.
-6. **Stop** a running experiment (or one config) with the buttons on the experiment page. A config whose first
-   3 trials all error, for example because of a wrong model id, is stopped automatically.
-7. **Reuse results**: if one config failed, fix it (a new version), then use "Add a config to this experiment".
-   It runs on the same tasks and N, and the finished trials of the other config are kept.
-
-**What needs a restart?** `tasks/`, `skills/` and `models.yaml` are mounted into the container and read fresh each
-time, so edits apply to the next config or experiment without a restart. `.env` (API keys, `MAX_CONCURRENCY`) needs
-`docker compose up -d`; note that `docker compose restart` does not re-read `.env`. Code changes (`api/`, `ui/`,
-`worker/`) and `Dockerfile` changes need `docker compose up --build`. A restart is safe: interrupted trials resume.
-
-## Run without Docker
+## Quick start
 
 ```bash
-brew install node@22 uv            # macOS; on Linux install Node >= 22.13 and uv
-cp .env.example .env               # add OPENROUTER_API_KEY
-./scripts/run-local.sh             # first run installs Hermes into ~/hermes-agent (a few minutes), then http://localhost:3000
-./scripts/run-local.sh cli "What is 17% of 2340?"          # one prompt through Hermes, no server needed
+cp .env.example .env              # add OPENROUTER_API_KEY
+docker compose up --build         # http://localhost:3000
+# or, without Docker (macOS: brew install node@22 uv):
+./scripts/run-local.sh
 ```
-The script installs Hermes (same pinned commit as Docker) into its own virtualenv, loads `.env`, builds the UI and
-the API, and starts the API, which serves the UI. Set `HERMES_DIR` to install Hermes elsewhere. The repo path must not
-contain spaces. For hot-reloading UI work, also run `cd ui && npm run dev` (http://localhost:5173).
+Try one prompt first: `./scripts/run-local.sh cli --model gpt-4o-mini "What is 17% of 2340?"`.
+Then follow [GUIDE §2](docs/GUIDE.md#2-your-first-comparison) for your first comparison.
 
-## Try one prompt from the terminal
+## Documentation
 
-```bash
-# without Docker
-./scripts/run-local.sh cli --harness hermes "What is 17% of 2340?"
-# with Docker: `exec` needs the container running (docker compose up -d); `run --rm` starts a one-off container instead
-docker compose run --rm evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
-docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes --skills acme-billing --task skill-01 --keep
-```
-It prints every trace event, the final answer, tokens and cost (and the grade when you pass `--task`).
-`--keep` leaves the trial folder on disk and prints its path. Inside it, `home/hermes/` is Hermes' private
-home for that trial (`memories/MEMORY.md`, `skills/`, `logs/agent.log`) and `workspace/` holds the files the agent wrote.
+| Doc | For | Contents |
+|-----|-----|----------|
+| [docs/GUIDE.md](docs/GUIDE.md) | users | quick start, first comparison, **how to add a task, model, harness or skill**, judge validation, troubleshooting |
+| [docs/API.md](docs/API.md) | integrators | every REST endpoint with real request/response examples, statuses, server settings |
+| [docs/FEATURES.md](docs/FEATURES.md) | buyers, users | feature list, **known limitations**, roadmap |
+| [docs/USAGE_AND_COST.md](docs/USAGE_AND_COST.md) | anyone running experiments | LLM calls, tokens, turns and cost per experiment; rate limits |
+| [docs/DESIGN.md](docs/DESIGN.md) | engineers | architecture, adapter interfaces, data model, isolation, statistics |
 
-## Tests
-
-```bash
-python -m pytest worker/tests        # graders, baseline harness, memory isolation, failure rules, judge parsing
-cd api && npm test                   # statistics, versioned configs, runner: retry / timeout / crash / resume
-```
-The tests use a fake model and a fake worker, so they need no API key.
-
-## Validate the LLM judge
-
-```bash
-python worker/judge_validation.py    # needs OPENROUTER_API_KEY; writes judge_validation/report.json
-```
-It runs the judge on 18 hand-labelled answers (`judge_validation/labels.json`) and reports accuracy,
-Cohen's kappa, and every disagreement.
-
-## How to add a task
-
-Add `tasks/<id>.yaml`:
-
-```yaml
-id: my-task
-category: files
-needs: skill:acme-billing        # optional, documents what should make configs differ
-memory_setup: ["Remember X=1"]   # optional: earlier sessions, run before the prompt in a NEW session
-setup_files: { data.csv: "a,b\n1,2\n" }   # optional: files placed in the workspace
-prompt: "..."
-grader: { type: exact, expected: "42" }
-```
-
-Grader types:
-
-| Type | Fields | Use for |
-|------|--------|---------|
-| `exact` | `expected` | short answers; compared after trimming and lower-casing |
-| `regex` | `pattern` | answers with several valid formats |
-| `file_check` | `path` + one of `equals`, `number`, `json_equals`, `contains` | state of the workspace after the run |
-| `unit_test` | `test_code` | code the agent wrote; the test file is added only after the agent finishes |
-| `llm_judge` | `rubric` | open-ended writing; validate it with `judge_validation.py` |
-
-No restart is needed: the API reads tasks when an experiment starts, and stores a snapshot of them in the experiment.
-
-## How to add a model
-
-Add an entry to `models.yaml`. Any OpenAI-compatible endpoint works: OpenRouter, xAI (Grok), Groq, a local vLLM or Ollama, LiteLLM.
-`models.yaml` already has commented-out examples for Grok, Groq and Ollama, and three free OpenRouter models (verify their IDs).
-
-```yaml
-  my-model:
-    provider_model: mistralai/mistral-small
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    price_per_mtok: { input: 0.1, output: 0.3 }
-```
-
-## How to add a harness
-
-1. Create `worker/harnesses/my_harness.py` with a class that implements
-   `Harness.run(task, config, model, workspace, home) -> Trace` (see `worker/harnesses/base.py`).
-   Record what happens with `trace.add("tool_call", ...)` and the other event types, then fill in
-   `final_answer`, the token counts and `stop_reason`.
-2. Register it in `worker/harnesses/__init__.py` and add its name to `HARNESSES` in `api/src/catalog.ts`.
-
-The platform core (runner, graders, statistics, UI) does not change.
+Internal notes from building the take-home are in `docs/internal/`: the build plan, design decisions and
+trade-offs, the experiment write-up, the judge-validation story, and learning notes.
 
 ## Project layout
 
 ```
-api/            NestJS: REST API, SQLite, trial runner (pool, retries, timeouts), statistics
-ui/             Vue 3: Configs, Experiments, Experiment (compare), Trial (trajectory)
-worker/         Python: run_trial.py, harness adapters, graders, failure categories, judge validation
-tasks/          21 task YAML files
-skills/         skills that configs can enable (acme-billing, acme-style)
-models.yaml     model registry and prices
-judge_validation/labels.json   hand-labelled answers for checking the judge
+api/          NestJS REST API, SQLite, trial runner (pool, retries, timeouts, resume, cancel), statistics
+ui/           Vue 3 UI: configs, experiments, comparison, trial trajectories
+worker/       Python: run_trial.py, harness adapters (hermes, baseline), graders, failure categories, cli.py
+tasks/        21 sample tasks (YAML)
+skills/       skills that configs can enable
+models.yaml   model registry and prices
+scripts/      run-local.sh (run without Docker)
+judge_validation/   hand-labelled answers for checking the LLM judge
 ```
+
+## Tests
+
+```bash
+python -m pytest worker/tests        # 19 tests: graders, harnesses, isolation, provider errors, failure rules, judge
+cd api && npm test                   # 11 tests: statistics, config versioning, runner retry/timeout/crash/resume/cancel/breaker
+```
+The tests use a fake model and a fake worker, so they need no API key.
 
 ## Assumptions
 
-- All models are reached through OpenRouter's OpenAI-compatible API, so one key covers both providers.
-- Prices in `models.yaml` were copied by hand; check them before quoting costs.
-- A trial that times out counts as a **failure** (the agent was too slow). A trial that keeps hitting rate limits
-  after 4 attempts, or crashes, is an **error**: it is excluded from statistics and shown separately.
-- "Memory" means memory across sessions *within one trial* (the `memory_setup` sessions, then the prompt).
-  Trials never share memory, so trials stay independent.
-- The judge labels in `judge_validation/labels.json` were written by the author, not by independent annotators.
-- The sandbox is a temp directory plus a separate process plus a timeout, not a container per trial. This is
-  fine for this trusted task set, and not fine for untrusted code (see `docs/DESIGN.md`, Known limits).
+- Models are reached through OpenAI-compatible APIs (OpenRouter by default). Prices in `models.yaml` are entered by
+  hand; check them before quoting costs.
+- A timeout counts as a **failure**. Provider errors (out of credits, bad model id, rate limits after retries) and
+  crashes count as **errors**: excluded from statistics and shown separately.
+- "Memory" means memory across sessions *within one trial*. Trials never share state.
+- The judge's reference labels were written by the author, not by independent annotators.
+- The sandbox (temp dir + process + timeout) suits trusted agents and tasks; see [FEATURES.md](docs/FEATURES.md#known-limitations).

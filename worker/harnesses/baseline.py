@@ -15,9 +15,9 @@ from harnesses.base import Harness, sessions
 SKILLS_DIR = ROOT / "skills"
 
 
-def _tool(name, description, **params):
+def _tool(tool_name, description, **params):  # not "name": read_skill has a parameter called name
     return {"type": "function", "function": {
-        "name": name, "description": description,
+        "name": tool_name, "description": description,
         "parameters": {"type": "object", "properties": {k: {"type": "string"} for k in params},
                        "required": list(params)}}}
 

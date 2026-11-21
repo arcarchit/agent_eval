@@ -126,7 +126,7 @@ export function compare(trials: TrialRow[], a: string, b: string) {
     tasks_dropped: [...new Set([...ra.keys(), ...rb.keys()])].filter((t) => !tasks.includes(t)),
     mean_diff: mean(diffs),
     ci,
-    p_value: Math.min(1, 2 * Math.min(below, above)),
+    p_value: diffs.length ? Math.min(1, 2 * Math.min(below, above)) : NaN, // no paired tasks: no test
     verdict,
     per_task: perTask.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta)),
     summary_a: summarize(trials, a),

@@ -33,7 +33,7 @@ The goal is to keep the code small enough that you can explain every file in an 
 | 8 | Statistics | `api/src/stats.ts` | Paired bootstrap over tasks gives a 95% CI for "A − B". If the CI contains 0, the result is noise. Per-task deltas are reported as well. |
 | 9 | UI | `ui/src/*` | Four pages: Configs, Experiments, Compare, Trial (trajectory viewer). |
 | 10 | Docker + docs | `docker-compose.yml`, `README.md`, `docs/DESIGN.md` | One command to start. Design doc with limits and cost formula. |
-| 11 | Real experiment (you run it) | `docs/EXPERIMENT.md` | Hermes with skills on vs off, same model, N=5. Needs your OpenRouter key. |
+| 11 | Real experiment (you run it) | `docs/internal/EXPERIMENT.md` | Hermes with skills on vs off, same model, N=5. Needs your OpenRouter key. |
 | 12 | Video (you record it) | | Create a config, run, compare, open a failed trial. |
 
 ## 3. Scope cuts (said out loud = "judgment")

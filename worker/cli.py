@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import ROOT, get_model  # noqa: E402
+from common import ROOT, ProviderError, RetryableError, get_model  # noqa: E402
 from graders import grade  # noqa: E402
 from run_trial import agent_view  # noqa: E402
 from harnesses import get_harness  # noqa: E402
@@ -49,7 +49,12 @@ def main():
         (workspace / name).write_text(content)
 
     model = get_model(a.model)
-    trace = get_harness(a.harness).run(agent_view(task), config, model, workspace, home)
+    try:
+        trace = get_harness(a.harness).run(agent_view(task), config, model, workspace, home)
+    except (RetryableError, ProviderError) as e:
+        kind = "retryable: rate limit or provider outage, try again later" if isinstance(e, RetryableError) \
+            else "will not fix itself: check the model id, key or credits"
+        sys.exit(f"\nMODEL ERROR ({kind}):\n  {e}\nTrial folder: {root}")
 
     for e in trace.events:
         detail = e.get("content") or e.get("arguments") or e.get("output") or e.get("stop_reason") or ""

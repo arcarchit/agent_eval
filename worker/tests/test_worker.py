@@ -260,3 +260,14 @@ def test_harness_never_sees_the_grader(monkeypatch):
     out = run_trial.run({"task": task, "config": {"harness": "spy", "model": "fake"}})
     assert "grader" not in seen and seen["prompt"] == "p"
     assert out["passed"]  # grading still uses the full task
+
+
+def test_baseline_reads_a_skill(tmp_path):
+    ws, home = dirs(tmp_path)
+    h = FakeBaseline([reply(tool_calls=[("read_skill", {"name": "acme-billing"})]), reply('{"answer": "ACME-25-GLO-0007"}')])
+    trace = h.run({"prompt": "invoice id?"}, {"skills": ["acme-billing"]}, MODEL, ws, home)
+    assert "read_skill" in trace.available_tools
+    assert any(e["type"] == "skill_used" and e["name"] == "acme-billing" for e in trace.events)
+    result = [e for e in trace.events if e["type"] == "tool_result"][0]
+    assert not result["error"] and "Invoice ID" in result["output"]
+    assert "acme-billing" in h.client.requests[0]["messages"][0]["content"]  # listed in the system prompt

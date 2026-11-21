@@ -206,7 +206,7 @@ provider detection based on the URL. It should accept any OpenAI-compatible URL,
   platform bug. Now fixed: provider errors end as `error`, are excluded from the statistics, and are shown as a count.
 - **Exact match was too strict.** "The trip is 215 minutes." failed against expected `215`. The answer tasks now ask for
   `{"answer": ...}` and the grader extracts that field.
-- **The judge was unstable at temperature 0.** The same answer got 3 passes and 4 fails. Full story in `docs/JUDGE_VALIDATION.md`.
+- **The judge was unstable at temperature 0.** The same answer got 3 passes and 4 fails. Full story in `docs/internal/JUDGE_VALIDATION.md`.
 - **The memory tasks made no sense in a skills experiment** (memory was off in both configs), so they are now excluded.
 - Good trajectories to show: `e181b969-39` vs `-38` (skill-05), and `-115` vs `-30` (skill-01).
 
@@ -271,3 +271,41 @@ started, it was stopped, or it crashed on start.
 
 `./scripts/run-local.sh cli "prompt"` runs one prompt with no server. These are the same environment variables the
 Dockerfile sets; the script just sets them on your Mac instead of inside the container.
+
+---
+
+## 11. Rate limits, usage, and the docs
+
+**Q: `HTTP 429: Provider returned error` with a free model. Is it a time limit, or did I hit 1,000 requests? The portal shows 971.**
+429 = too many requests. With OpenRouter there are two kinds:
+- **Your own quota** for `:free` models: about 20 per minute, plus a daily cap that is higher once you have bought
+  credits. The error then names the limit ("free-models-per-min" or "free-models-per-day").
+- **"Provider returned error"**: the *upstream* provider hosting that free model is overloaded or rate-limiting
+  everyone using it through OpenRouter. That wording points here, not to your daily cap. With 971 used, you were
+  also close to a 1,000 cap, so either could happen next.
+
+To see which one it was, open the request dump that Hermes printed and look for the provider's message
+(`python3 -m json.tool <dump.json> | grep -i -B2 -A5 "error\|limit"`).
+Watch out for **retry amplification**: Hermes retries each call 3 times, then the platform retries the whole
+trial up to 4 times, so one rate limit can burn ~12 requests. On free models set `MAX_CONCURRENCY=1` and consider
+`MAX_ATTEMPTS=2`. The CLI now prints a short `MODEL ERROR` message instead of a Python traceback.
+
+**Q: How many LLM calls, tokens and turns does an experiment use? Is the grader run more than once?**
+Everything is in `docs/USAGE_AND_COST.md`. The short version, measured with Hermes + gpt-4o-mini:
+- ~2.5–3 model calls per trial, ~1.7–1.9k input tokens per call, ~120 output tokens per trial.
+- 1 user turn per trial (2 for memory tasks).
+- The grader runs **once** per trial. Deterministic graders make **0** LLM calls; `llm_judge` makes **5** calls
+  (5 votes on the same response, majority wins).
+- Skills experiment (190 trials): ~510 agent calls + 150 judge calls ≈ 660 requests, ≈ $0.17 on gpt-4o-mini.
+- Judge validation: 19 examples × 5 votes = 95 single-turn calls, ≈ $0.01.
+
+**Q: How should docs be organised if we sell this as a product?**
+By reader:
+- `README` is a one-page entry point;
+- `GUIDE` holds the tutorials (add a task, model, harness, skill);
+- `API` is the endpoint reference, with real responses;
+- `FEATURES` lists features, known limitations and the roadmap; being honest about limits builds trust;
+- `USAGE_AND_COST` covers calls, tokens, cost and rate limits;
+- `DESIGN` is for engineers.
+
+Interview and build notes go in `docs/internal/`, so a customer never sees "interview cheat sheet".

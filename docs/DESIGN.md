@@ -98,7 +98,7 @@ They include subtle failures: "So sorry!" where "sorry" is banned, a missing CI-
 the limit is 3. `worker/judge_validation.py` reports accuracy, Cohen's kappa, false passes and false fails.
 It also reports **instability**: examples where repeated calls on the same input disagreed.
 **Acceptance rule**: kappa ≥ 0.8, at most 1 false pass, and 0 unstable items. Otherwise fix the rubric before
-trusting judge tasks. See `docs/JUDGE_VALIDATION.md` for a real instability found in the first experiment
+trusting judge tasks. See `docs/internal/JUDGE_VALIDATION.md` for a real instability found in the first experiment
 (the same answer got 3 passes and 4 fails) and how it was fixed.
 
 ## 6. Statistical method
@@ -140,59 +140,30 @@ model guessed the format.
 
 Not implemented: "grader disagreement" (it would need two graders per task). It is listed as future work.
 
-## 8. Known limits: where not to trust the conclusions
+## 8. Known limits
 
-- **Task-set size**: 21 tasks, ~5 per category. Only large effects are detectable (see N above). Do not read
-  meaning into per-category differences of one or two tasks.
-- **Synthetic, easy tasks**: most are short. Hard multi-step agentic work (long refactors, web research) is not
-  covered, and results may not carry over to it.
-- **Judge bias**: the judge is an LLM, possibly from the same family as the agent being judged (self-preference),
-  and it may favour longer answers. It is checked against only 18 labels written by the author, not independent
-  annotators. Only 3 tasks use it.
-- **Contamination**: generic tasks (palindromes, fizzbuzz-style, sky colour) are surely in training data. The
-  ACME skill tasks use made-up rules for exactly this reason.
-- **Harness quirks**: Hermes adds a large system prompt (skills index, memory, identity) and its own retries and
-  context compression, so its token counts and latency are not directly comparable with the minimal baseline.
-  The baseline `memory_read` events are explicit tool calls, while Hermes reads memory through prompt injection.
-  Hermes sees the skill index in its system prompt; the baseline sees skill names in its system prompt.
-- **Grader secrecy**: the harness gets the task without its grader (`agent_view()` in `run_trial.py`), and hidden
-  unit tests are written only after the agent finishes. Filesystem access to `/app/tasks` is the remaining gap (below).
-- **Sandbox**: a temp dir plus a process plus a timeout is **not** a security boundary. Inside Docker your Mac is
-  safe, but Hermes' `terminal` and file tools can still reach the container: `/app/tasks` (expected answers, so
-  an agent could cheat), the SQLite DB, and environment variables including the API key. Use a container or
-  microVM per trial, with no secrets and no task files mounted, before running untrusted tasks or treating
-  scores as cheat-proof.
-- **Hermes can edit skills** (`skill_manage` comes with the `skills` toolset). Edits go to the trial's private
-  copy and are thrown away, so they never reach the repo, other trials or the baseline. But *within* a trial,
-  Hermes can use a skill as a notepad: in the first run it saved a memory-task fact as a skill with memory off.
-  So skills-on can leak into memory tasks; exclude `mem-*` from skills experiments.
-- **Provider errors** (rate limits after retries, out of credits) are excluded rather than imputed. If errors cluster on one config, the comparison can be
-  biased; the UI shows error counts so this is visible.
-- **Prices** are static numbers in `models.yaml`. Provider-side caching and discounts are ignored.
-- **Single machine**: the in-process queue is not distributed. A crash loses only in-flight trials, which re-run
-  on restart.
+The full, maintained list is in [FEATURES.md](FEATURES.md#known-limitations). The ones that matter most for
+*trusting a conclusion*:
+- 21 tasks can detect only large effects (about 13 points or more);
+- the judge is an LLM with possible bias and run-to-run instability (mitigated by explicit rubrics, a 5-vote majority and validation);
+- the sandbox is not a security boundary (an agent with the terminal tool could read the task files);
+- provider errors are excluded rather than imputed;
+- comparisons built by adding a config later span different times.
 
 ## 9. Cost
 
-**Formula** (per experiment):
+Formula, measured numbers (calls, tokens and turns per trial, judge calls, the judge validation script) and a worked
+example are in [USAGE_AND_COST.md](USAGE_AND_COST.md). Summary:
 
 ```
-cost = tasks × trials × configs × (avg_input_tokens × price_in + avg_output_tokens × price_out)
-     + judge_tasks × trials × configs × judge_tokens × judge_price
+cost = tasks × N × configs × (avg_input_tokens × price_in + avg_output_tokens × price_out)
+     + judge_tasks × N × configs × judge_votes × judge_tokens × judge_price
 ```
+Measured for Hermes + gpt-4o-mini: about 2.5–3 calls and ~4–6k input / ~120 output tokens per trial,
+**≈ $0.0007–0.0009 per trial**. The 190-trial skills experiment is **≈ $0.17** including 150 judge calls.
+(An earlier estimate in this doc of ~12k input tokens per trial was too high; the measured Hermes prompt is
+~1.7k tokens per call.)
 
-Rough numbers for Hermes + gpt-4o-mini: about 3 model calls per trial with Hermes' ~4k-token system prompt and
-tool schemas → ~12k input + ~300 output tokens per trial →
-`12,000 × $0.15/M + 300 × $0.60/M ≈ $0.002` per trial. For 21 tasks × 5 trials × 2 configs = 210 trials,
-that is **≈ $0.40**, and judge calls add < $0.01. The actual spend is shown on the experiment page (total cost
-per config) and is recorded in `docs/EXPERIMENT.md`.
-
-**How to reduce it**:
-- **Prompt caching**: Hermes' system prompt is identical across trials, and provider prefix caching cuts input
-  cost by 50–90%.
-- **Early stopping (sequential testing)**: run N=2 first, and add trials only for tasks where the configs
-  disagree. Tasks where both configs score 0/2 or 2/2 rarely change the verdict.
-- **Sampling**: run a stratified subset of tasks for quick checks, and the full set before a release.
-- **Cache identical trials**: at temperature 0 with a fixed seed, re-use results for (config hash, task hash) pairs.
-- **Cheap judge**: deterministic graders where possible (18/21 tasks here), and a small judge model, validated
-  against labels.
+**How to reduce it:** prompt caching, early stopping (N=2 first, then add trials only where configs disagree), task
+sampling for quick checks, a result cache for identical trials, deterministic graders where possible, and fewer
+judge votes once the judge is shown to be stable. Details in [USAGE_AND_COST.md](USAGE_AND_COST.md#ways-to-reduce-calls-and-cost).

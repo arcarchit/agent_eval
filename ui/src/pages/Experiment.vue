@@ -127,7 +127,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
         <div class="verdict" :class="cmp.verdict === 'no significant difference' ? 'muted' : 'pass'">{{ cmp.verdict }}</div>
         <p>
           Mean difference A − B: <strong>{{ signedPct(cmp.mean_diff) }}</strong>,
-          95% CI {{ ci(cmp.ci) }}, bootstrap p ≈ {{ cmp.p_value.toFixed(3) }}, paired over {{ cmp.tasks_compared }} tasks.
+          95% CI {{ ci(cmp.ci) }}, bootstrap p ≈ {{ cmp.p_value == null ? "–" : cmp.p_value.toFixed(3) }}, paired over {{ cmp.tasks_compared }} tasks.
           <span v-if="cmp.verdict === 'no significant difference'">The CI contains 0, so this difference may be noise.</span>
           <span v-if="cmp.tasks_dropped.length" class="warn">Dropped (no finished trials on one side): {{ cmp.tasks_dropped.join(', ') }}</span>
         </p>

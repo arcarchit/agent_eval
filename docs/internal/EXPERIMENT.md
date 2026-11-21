@@ -3,7 +3,7 @@
 > **First attempt (e181b969) was discarded:** OpenRouter credits ran out mid-run, and 116 of 210 trials got
 > HTTP 402. The platform graded them as `wrong_answer`, which was a bug (now fixed: such trials end as `error`
 > and are excluded). The run also showed exact match was too strict and the judge was unstable; see
-> `docs/JUDGE_VALIDATION.md`. Good trajectories from it: `e181b969-39` vs `-38` (skill-05), `-115` vs `-30` (skill-01).
+> `docs/internal/JUDGE_VALIDATION.md`. Good trajectories from it: `e181b969-39` vs `-38` (skill-05), `-115` vs `-30` (skill-01).
 >
 > **Status: setup ready, results not yet filled in.** Running this needs an OpenRouter key and costs
 > about $0.40. Fill in every `TODO` from the experiment page. Do not edit numbers by hand.
