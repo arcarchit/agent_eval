@@ -255,7 +255,7 @@ def test_harness_never_sees_the_grader(monkeypatch):
             return Trace(final_answer='{"answer": "215"}')
 
     monkeypatch.setattr(run_trial, "get_harness", lambda name: Spy())
-    monkeypatch.setattr(run_trial, "get_model", lambda name: MODEL)
+    monkeypatch.setattr(run_trial, "get_model", lambda name, spec=None: MODEL)
     task = {"id": "t", "prompt": "p", "grader": {"type": "exact", "expected": "215"}}
     out = run_trial.run({"task": task, "config": {"harness": "spy", "model": "fake"}})
     assert "grader" not in seen and seen["prompt"] == "p"
