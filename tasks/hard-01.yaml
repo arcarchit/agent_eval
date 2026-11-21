@@ -1,0 +1,42 @@
+id: hard-01
+category: hard
+difficulty: hard
+prompt: 'transactions.csv has messy sales data and rates.json has exchange rates to USD. Compute NET revenue in
+  USD per region: count ''paid'' rows as positive, subtract ''refunded'' rows, ignore ''void'' rows, and if a transaction
+  id appears more than once count only its first row. Convert with rates.json, sum per region, and round each region''s
+  total to 2 decimals at the end. Include every region that appears in the file (0 if nothing counts). Write the
+  result to revenue.json as an object mapping region to number, e.g. {"north": 12.5}.'
+setup_files:
+  transactions.csv: |
+    id,date,region,currency,amount,status
+    T01,2025-03-01,north,USD,120.00,paid
+    T02,2025-03-01,south,EUR,80.00,paid
+    T03,2025-03-02,north,GBP,50.00,paid
+    T04,2025-03-02,east,USD,200.00,void
+    T05,2025-03-03,south,USD,35.50,paid
+    T02,2025-03-03,south,EUR,80.00,paid
+    T06,2025-03-04,east,EUR,64.00,paid
+    T07,2025-03-04,north,USD,120.00,refunded
+    T08,2025-03-05,west,GBP,19.99,paid
+    T09,2025-03-05,east,USD,15.25,refunded
+    T10,2025-03-06,west,USD,300.00,paid
+    T11,2025-03-06,south,GBP,42.00,void
+    T12,2025-03-07,north,EUR,99.90,paid
+    T13,2025-03-07,west,EUR,10.00,refunded
+    T06,2025-03-08,east,EUR,64.00,paid
+    T14,2025-03-08,east,GBP,70.00,paid
+    T15,2025-03-09,south,USD,12.75,paid
+  rates.json: |
+    {
+      "USD": 1.0,
+      "EUR": 1.1,
+      "GBP": 1.25
+    }
+grader:
+  type: file_check
+  path: revenue.json
+  json_equals:
+    east: 142.65
+    north: 172.39
+    south: 136.25
+    west: 313.99

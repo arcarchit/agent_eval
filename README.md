@@ -25,22 +25,25 @@ Then follow [GUIDE §2](docs/GUIDE.md#2-your-first-comparison) for your first co
 
 | Doc | For | Contents |
 |-----|-----|----------|
+| [docs/SUBMISSION.md](docs/SUBMISSION.md) | **assignment reviewers** | the deliverables in the assignment's order, with status and links; video script |
 | [docs/GUIDE.md](docs/GUIDE.md) | users | quick start, first comparison, **how to add a task, model, harness or skill**, judge validation, troubleshooting |
 | [docs/API.md](docs/API.md) | integrators | every REST endpoint with real request/response examples, statuses, server settings |
 | [docs/FEATURES.md](docs/FEATURES.md) | buyers, users | feature list, **known limitations**, roadmap |
 | [docs/USAGE_AND_COST.md](docs/USAGE_AND_COST.md) | anyone running experiments | LLM calls, tokens, turns and cost per experiment; rate limits |
 | [docs/DESIGN.md](docs/DESIGN.md) | engineers | architecture, adapter interfaces, data model, isolation, statistics |
 
-Internal notes from building the take-home are in `docs/internal/`: the build plan, design decisions and
-trade-offs, the experiment write-up, the judge-validation story, and learning notes.
+The experiment write-up is in [docs/EXPERIMENT.md](docs/EXPERIMENT.md) and the judge-validation story in
+[docs/JUDGE_VALIDATION.md](docs/JUDGE_VALIDATION.md). Internal build notes (plan, decisions and trade-offs, learning
+notes) are in `docs/internal/`.
 
 ## Project layout
 
 ```
 api/          NestJS REST API, SQLite, trial runner (pool, retries, timeouts, resume, cancel), statistics
 ui/           Vue 3 UI: configs, experiments, comparison, trial trajectories
-worker/       Python: run_trial.py, harness adapters (hermes, baseline), graders, failure categories, cli.py
-tasks/        21 sample tasks (YAML)
+worker/       Python: run_trial.py, harness adapters (hermes, baseline), graders, failure categories, cli.py,
+              power_analysis.py (how N was chosen)
+tasks/        26 sample tasks (YAML), including 5 hard ones
 skills/       skills that configs can enable
 models.yaml   model registry and prices
 scripts/      run-local.sh (run without Docker)
@@ -50,7 +53,7 @@ judge_validation/   hand-labelled answers for checking the LLM judge
 ## Tests
 
 ```bash
-python -m pytest worker/tests        # 19 tests: graders, harnesses, isolation, provider errors, failure rules, judge
+python -m pytest worker/tests        # 20 tests: graders, harnesses, isolation, provider errors, failure rules, judge
 cd api && npm test                   # 11 tests: statistics, config versioning, runner retry/timeout/crash/resume/cancel/breaker
 ```
 The tests use a fake model and a fake worker, so they need no API key.

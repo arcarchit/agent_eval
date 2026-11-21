@@ -10,3 +10,6 @@ grader:
     assert is_palindrome("No 'x' in Nixon")
     assert not is_palindrome("hello")
     assert not is_palindrome("ab")
+    assert is_palindrome("Zq7!--7Q z")
+    assert not is_palindrome("Zq7!--7Q zx")
+    assert is_palindrome("..,,")

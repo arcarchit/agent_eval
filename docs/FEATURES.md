@@ -16,7 +16,7 @@ agent better, worse, or the same, and how sure are we?"*
   past result always points to the exact settings that produced it.
 
 ### Tasks and grading
-- **21 sample tasks** across reasoning, files, coding, skill-dependent, memory-dependent and writing.
+- **26 sample tasks** across reasoning, files, coding, skill-dependent, memory-dependent, writing, and 5 hard multi-step tasks (`hard-*`: messy data cleaning, interleaved log analysis, a TTL+LRU cache, a two-bug fix across files, and a skill-dependent batch report).
 - **Deterministic graders:** exact match and regex (on an extracted `{"answer": ...}` field), file-state checks
   (text, number, JSON equality), and hidden unit tests written only after the agent finishes.
 - **LLM-as-judge** with a rubric where every point must hold, reasoning before the verdict, temperature 0, and a
@@ -57,7 +57,7 @@ agent better, worse, or the same, and how sure are we?"*
 ### Interfaces and deployment
 - Web UI (Vue), REST API ([API.md](API.md)), CLI.
 - One command: `docker compose up`, or `./scripts/run-local.sh` without Docker. SQLite storage, no other services.
-- Tests: 19 Python tests (graders, harnesses, isolation, provider errors, failure rules, judge) and 11 API tests
+- Tests: 20 Python tests (graders, harnesses, isolation, provider errors, failure rules, judge) and 11 API tests
   (statistics, versioning, runner retry/timeout/crash/resume/cancel/breaker).
 
 ---
@@ -67,7 +67,7 @@ agent better, worse, or the same, and how sure are we?"*
 These are the places where results should not be trusted without care, or where the product is not ready for some uses.
 
 ### Validity of conclusions
-- **Small sample task set.** 21 tasks can detect only large effects, about 13 percentage points or more. Real
+- **Small sample task set.** About 20–26 tasks detect only large effects: in simulation, a +7-point average gain is found only 64% of the time even at N=10 (DESIGN §6). Real
   decisions need 100+ tasks drawn from your own workload.
 - **Synthetic, short tasks.** Long multi-step work (refactors, research, browsing) is not covered.
 - **Judge bias.** The judge is an LLM. It may prefer its own model family or longer answers, and hosted models are

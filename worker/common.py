@@ -65,5 +65,14 @@ class Trace:
     output_tokens: int = 0
     available_tools: list = field(default_factory=list)
 
-    def add(self, type: str, **data):
-        self.events.append({"type": type, "ts": round(time.time(), 3), **data})
+    def add(self, type: str, ts: float | None = None, **data):
+        """ts = when the event finished (seconds). The UI shows the gap to the previous event as its duration,
+        so an "assistant" event's duration is the model call's latency. Adapters that only see the result
+        afterwards (Hermes) pass the harness's own timestamps."""
+        self.events.append({"type": type, "ts": round(ts if ts else time.time(), 3), **data})
+
+    def llm_calls(self) -> int:
+        return sum(e["type"] == "assistant" for e in self.events)
+
+    def turns(self) -> int:  # user turns = sessions
+        return sum(e["type"] == "session_start" for e in self.events)

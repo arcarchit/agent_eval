@@ -111,6 +111,7 @@ export class Runner implements OnModuleInit {
         return this.finish(id, {
           status: 'done', passed: out.passed ? 1 : 0, score: out.score, failure_category: out.failure_category,
           grader: JSON.stringify(out.grader), trace: JSON.stringify(out.trace),
+          llm_calls: out.llm_calls ?? null, turns: out.turns ?? null,   // older workers do not send these
           input_tokens: out.input_tokens, output_tokens: out.output_tokens, cost_usd: out.cost_usd,
           judge_cost_usd: out.judge_cost_usd, latency_ms: out.latency_ms,
         });

@@ -81,10 +81,10 @@ Tasks, skills and models are files in git, so they are versioned by git. Hermes 
 
 | Grader | Tasks | Notes |
 |--------|-------|-------|
-| `exact` | 9 | the prompt asks for `{"answer": ...}`; the grader takes the last JSON `answer` field (falling back to the whole reply), then trims, lower-cases, and strips quotes and a trailing period |
+| `exact` | 10 | the prompt asks for `{"answer": ...}`; the grader takes the last JSON `answer` field (falling back to the whole reply), then trims, lower-cases, and strips quotes and a trailing period |
 | `regex` | 2 | same answer extraction; used when several formats are valid (`$72`, `72.00`) |
-| `file_check` | 3 | checks the workspace after the run: number, exact text, or JSON equality |
-| `unit_test` | 4 | the hidden test file is written **after** the agent finishes, then run with Python |
+| `file_check` | 5 | checks the workspace after the run: number, exact text, or JSON equality |
+| `unit_test` | 6 | the hidden test file is written **after** the agent finishes, then run with Python |
 | `llm_judge` | 3 | rubric where every point must hold, temperature 0, reasoning before the verdict, JSON output, **majority of 5 votes** (all votes stored) |
 
 **Why JSON answers**: in the first real run, correct answers wrapped in a sentence ("The trip is 215 minutes.") failed exact match. That measured formatting, not the skill. Asking for `{"answer": ...}` and extracting the field keeps grading strict but fair. A reply that ignores the format and is not a bare answer still fails.
@@ -98,7 +98,7 @@ They include subtle failures: "So sorry!" where "sorry" is banned, a missing CI-
 the limit is 3. `worker/judge_validation.py` reports accuracy, Cohen's kappa, false passes and false fails.
 It also reports **instability**: examples where repeated calls on the same input disagreed.
 **Acceptance rule**: kappa ≥ 0.8, at most 1 false pass, and 0 unstable items. Otherwise fix the rubric before
-trusting judge tasks. See `docs/internal/JUDGE_VALIDATION.md` for a real instability found in the first experiment
+trusting judge tasks. See `docs/JUDGE_VALIDATION.md` for a real instability found in the first experiment
 (the same answer got 3 passes and 4 fails) and how it was fixed.
 
 ## 6. Statistical method
@@ -121,13 +121,42 @@ trusting judge tasks. See `docs/internal/JUDGE_VALIDATION.md` for a real instabi
 - **Cost, latency, tokens**: mean cost per trial, total cost, mean and p90 latency, mean tokens, shown next to the
   pass rate for every config.
 
-**Choosing N.** Two sources of noise: (1) trial noise inside a task, with SD ≤ 0.5/√N for a pass rate (N=5 → ≤0.22);
-(2) differences between tasks. The CI half-width of the mean difference is about `2·SD(d_t)/√n_tasks`. With 21
-tasks and SD(d_t) ≈ 0.3, that is ≈ ±0.13. So this task set can detect an effect of about 13 points or more. A
-targeted effect such as skills (5 tasks going from ~0% to ~80%) moves the mean by ~19 points, which is detectable.
-Raising N above 5 mainly shrinks (1). Past that, more **tasks** help more than more trials. N=5 is the point
-where trial noise (≤0.22 per task, averaged over 21 tasks) is smaller than the between-task spread, at a cost
-of a few cents for this experiment.
+**Choosing N: by simulation, not by rule of thumb** (`python worker/power_analysis.py`, about 6 s, no API calls).
+
+There are two sources of noise:
+1. **Trial noise** inside a task: an agent is random, so N trials give a noisy pass rate (SD up to 0.5/√N).
+2. **Task noise**: tasks differ, and we only have a sample of them.
+
+N only reduces (1). The number of tasks reduces (2).
+
+The script runs *our exact method* (per-task means, paired differences, bootstrap CI over tasks) on 250 fake
+experiments per cell, where the true answer is known, with 19 tasks and realistic base pass rates (many tasks
+always pass or always fail). Each cell is the probability that the verdict is "A better":
+
+| Truth | N=1 | N=3 | N=5 | N=10 |
+|-------|-----|-----|-----|------|
+| No difference (**false positive rate**; should be ~5%) | 2% | 5% | 6% | 6% |
+| Skills-like: 5 tasks go from 10% to 90% (mean +0.21) | 30% | 58% | **73%** | **88%** |
+| +20 points on every task (mean +0.13 after capping at 100%) | 26% | 71% | 84% | 96% |
+| +10 points on every task (mean +0.07) | 8% | 29% | 39% | 64% |
+
+(Each number is ±3 points of simulation noise.)
+
+What this tells us:
+- **The method is calibrated**: with no real difference it declares a winner about 5% of the time, as a 95% CI should.
+  Treating trials as independent would not be calibrated like this.
+- **N=1 is useless** for agents: even a large effect is missed 70% of the time.
+- **N=5 detects the skills effect 73% of the time; N=10 detects it 88% of the time.** The usual target is 80%, so for a final
+  decision N=10 is the right choice. It doubles the cost (≈ $0.34 instead of $0.17 on gpt-4o-mini; see USAGE_AND_COST.md).
+  N=5 is the minimum for iterating.
+- **Small effects need more tasks, not more trials.** Even at N=10, a +10-point improvement is found only 64% of the
+  time with 19 tasks. Past N≈10, adding tasks is what increases power.
+- The simulation is slightly pessimistic for temperature 0: real trial outcomes for a task are more consistent than
+  independent coin flips, so real trial noise is lower.
+
+**Decision rule we use:** N=5 while iterating (cheap, catches large effects); N=10 for the reported experiment. A
+"no significant difference" verdict means "not detected at this power", not "proven equal". The power table
+tells you how large an effect could have been missed.
 
 ## 7. Failure analysis (`worker/failures.py`)
 
@@ -144,7 +173,7 @@ Not implemented: "grader disagreement" (it would need two graders per task). It 
 
 The full, maintained list is in [FEATURES.md](FEATURES.md#known-limitations). The ones that matter most for
 *trusting a conclusion*:
-- 21 tasks can detect only large effects (about 13 points or more);
+- a task set of this size detects only large effects (see the power table in §6: a +7-point average gain is found only 64% of the time even at N=10);
 - the judge is an LLM with possible bias and run-to-run instability (mitigated by explicit rubrics, a 5-vote majority and validation);
 - the sandbox is not a security boundary (an agent with the terminal tool could read the task files);
 - provider errors are excluded rather than imputed;

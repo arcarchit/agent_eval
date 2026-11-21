@@ -53,6 +53,8 @@ def run(job: dict) -> dict:
         "grader": {"type": task["grader"]["type"], "reasoning": result["reasoning"]},
         "failure_category": classify(trace, result["passed"]),
         "trace": asdict(trace),
+        "llm_calls": trace.llm_calls(),   # model calls across all sessions
+        "turns": trace.turns(),           # user turns (sessions)
         "input_tokens": trace.input_tokens,
         "output_tokens": trace.output_tokens,
         "cost_usd": model.cost(trace.input_tokens, trace.output_tokens),

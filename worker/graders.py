@@ -102,7 +102,7 @@ def judge(task_prompt: str, answer: str, rubric: str, client=None, votes: int | 
     """LLM-as-judge: fixed rubric, temperature 0, reasoning before verdict.
 
     Temperature 0 is NOT deterministic on hosted APIs: the same answer was observed to get
-    3 passes and 4 fails (docs/internal/JUDGE_VALIDATION.md). So we ask `votes` times (judge_votes in
+    3 passes and 4 fails (docs/JUDGE_VALIDATION.md). So we ask `votes` times (judge_votes in
     models.yaml) and take the majority. All votes are kept so instability stays visible.
     """
     cfg = load_models()

@@ -42,10 +42,10 @@ internal retries on errors also count as requests.
 | `llm_judge` | once, which asks the judge `judge_votes` times (5) and takes the majority | **5** |
 
 So yes: for judge tasks, the **same response is judged 5 times**, on purpose, because the judge is not
-deterministic even at temperature 0 (see `docs/internal/JUDGE_VALIDATION.md`). Each judge call is a single turn
+deterministic even at temperature 0 (see `docs/JUDGE_VALIDATION.md`). Each judge call is a single turn
 with no tools: about **400 input tokens** (task + answer + rubric + instructions) and **60–150 output tokens**
 (reasoning + verdict). That is about **$0.0001 per call** with gpt-4o-mini (measured: $0.000096 per call).
-In the sample task set, 3 of 21 tasks use the judge (`skill-05`, `judge-01`, `judge-02`).
+In the sample task set, 3 of 26 tasks use the judge (`skill-05`, `judge-01`, `judge-02`).
 
 ## 3. Formulas
 
@@ -83,7 +83,10 @@ time ≈ trials × avg_latency / MAX_CONCURRENCY      (if not rate-limited)
 | Time (paid model, `MAX_CONCURRENCY=4`) | 190 × ~7 s / 4 | **~6 min** |
 | Time (free model, ~20 requests/min) | 660 requests / 20 | **≥ 33 min**, and more with retries |
 
-The full 21 tasks give 210 trials and about the same totals (memory tasks have 2 sessions, so a few more calls).
+**The reported experiment** uses N=10 (see the power analysis in DESIGN §6) and 24 tasks, including the 5 hard ones:
+480 trials, ≈ 1,450 agent calls (hard tasks take more steps) + 300 judge calls ≈ **1,700 requests**, ≈ **$0.45** on
+gpt-4o-mini, ~15 min at `MAX_CONCURRENCY=4`. On a free model capped at ~1,000 requests/day, this does not fit in one
+day. Use N=5 (~850 requests) and report the lower power.
 
 ## 5. Judge validation script
 

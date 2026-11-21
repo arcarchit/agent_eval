@@ -74,23 +74,25 @@ class HermesHarness(Harness):
 
     @staticmethod
     def _add_messages(trace: Trace, messages: list):
-        """Convert Hermes' OpenAI-style message list into our trace events."""
+        """Convert Hermes' OpenAI-style message list into our trace events. Each Hermes message carries its own
+        "timestamp", which we keep, so per-step durations in the UI are real."""
         for m in messages:
+            ts = m.get("timestamp")
             if m["role"] == "user":
-                trace.add("user", content=m.get("content"))
+                trace.add("user", ts=ts, content=m.get("content"))
             elif m["role"] == "assistant":
                 calls = [c["function"] for c in m.get("tool_calls") or []]
-                trace.add("assistant", content=m.get("content") or "", tool_calls=calls)
+                trace.add("assistant", ts=ts, content=m.get("content") or "", tool_calls=calls)
                 for c in calls:
-                    trace.add("tool_call", name=c["name"], arguments=c["arguments"])
+                    trace.add("tool_call", ts=ts, name=c["name"], arguments=c["arguments"])
                     args = _json(c["arguments"])
                     if c["name"] == "memory" and args.get("action") in ("add", "replace", "remove"):
-                        trace.add("memory_write", content=args.get("content") or args.get("old_text"))
+                        trace.add("memory_write", ts=ts, content=args.get("content") or args.get("old_text"))
                     if c["name"] == "skill_view":
-                        trace.add("skill_used", name=args.get("name"))
+                        trace.add("skill_used", ts=ts, name=args.get("name"))
             elif m["role"] == "tool":
                 content = str(m.get("content", ""))
-                trace.add("tool_result", name=m.get("name"), output=content[:4000], error=is_tool_error(content))
+                trace.add("tool_result", ts=ts, name=m.get("name"), output=content[:4000], error=is_tool_error(content))
 
 
 def is_tool_error(content: str) -> bool:

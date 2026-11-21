@@ -10,3 +10,6 @@ grader:
     assert parse_duration("2h") == 7200
     assert parse_duration("1h2m3s") == 3723
     assert parse_duration("10m") == 600
+    assert parse_duration("0h0m7s") == 7
+    assert parse_duration("27m") == 1620
+    assert parse_duration("3h59s") == 10859

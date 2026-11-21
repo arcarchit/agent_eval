@@ -175,8 +175,17 @@ export class ApiController {
     const matrix: Record<string, Record<string, Record<string, number>>> = {};
     for (const t of trials) {
       if (t.status === 'cancelled') continue;
-      const cell = ((matrix[t.task_id] ??= {})[t.config_id] ??= { passed: 0, done: 0, error: 0, pending: 0 });
-      if (t.status === 'done') { cell.done++; cell.passed += t.passed ? 1 : 0; }
+      const cell = ((matrix[t.task_id] ??= {})[t.config_id] ??=
+        { passed: 0, done: 0, error: 0, pending: 0, avg_latency_ms: 0, avg_cost_usd: 0, avg_llm_calls: 0, avg_turns: 0 });
+      if (t.status === 'done') {
+        cell.done++;
+        cell.passed += t.passed ? 1 : 0;
+        // running means over finished trials
+        cell.avg_latency_ms += ((t.latency_ms ?? 0) - cell.avg_latency_ms) / cell.done;
+        cell.avg_cost_usd += ((t.cost_usd ?? 0) - cell.avg_cost_usd) / cell.done;
+        cell.avg_llm_calls += ((t.llm_calls ?? 0) - cell.avg_llm_calls) / cell.done;
+        cell.avg_turns += ((t.turns ?? 0) - cell.avg_turns) / cell.done;
+      }
       else if (t.status === 'error') cell.error++;
       else cell.pending++;
     }
@@ -209,7 +218,7 @@ export class ApiController {
     const trials = this.db.prepare(`SELECT * FROM trials WHERE experiment_id = ? ORDER BY id`).all(id) as any[];
     if (format === 'csv') {
       const cols = ['id', 'config_id', 'task_id', 'trial_index', 'status', 'passed', 'score', 'failure_category',
-        'input_tokens', 'output_tokens', 'cost_usd', 'judge_cost_usd', 'latency_ms', 'attempts', 'error'];
+        'llm_calls', 'turns', 'input_tokens', 'output_tokens', 'cost_usd', 'judge_cost_usd', 'latency_ms', 'attempts', 'error'];
       const esc = (v: unknown) => (v == null ? '' : `"${String(v).replace(/"/g, '""')}"`);
       const csv = [cols.join(','), ...trials.map((t) => cols.map((c) => esc(t[c])).join(','))].join('\n');
       res.attachment(`experiment-${id}.csv`).type('text/csv').send(csv);
@@ -247,7 +256,7 @@ export class ApiController {
   private trialRows(id: string): (TrialRow & Record<string, any>)[] {
     return this.db.prepare(`
       SELECT id, task_id, config_id, trial_index, status, passed, score, failure_category, attempts,
-             input_tokens, output_tokens, cost_usd, latency_ms, error
+             input_tokens, output_tokens, cost_usd, latency_ms, llm_calls, turns, error
       FROM trials WHERE experiment_id = ? ORDER BY task_id, config_id, trial_index`).all(id) as any[];
   }
 }

@@ -3,7 +3,7 @@
 > **First attempt (e181b969) was discarded:** OpenRouter credits ran out mid-run, and 116 of 210 trials got
 > HTTP 402. The platform graded them as `wrong_answer`, which was a bug (now fixed: such trials end as `error`
 > and are excluded). The run also showed exact match was too strict and the judge was unstable; see
-> `docs/internal/JUDGE_VALIDATION.md`. Good trajectories from it: `e181b969-39` vs `-38` (skill-05), `-115` vs `-30` (skill-01).
+> `docs/JUDGE_VALIDATION.md`. Good trajectories from it: `e181b969-39` vs `-38` (skill-05), `-115` vs `-30` (skill-01).
 >
 > **Status: setup ready, results not yet filled in.** Running this needs an OpenRouter key and costs
 > about $0.40. Fill in every `TODO` from the experiment page. Do not edit numbers by hand.
@@ -18,16 +18,19 @@ Same harness (Hermes), same model (`gpt-4o-mini`), same tools (`file`), memory o
 | `hermes-noskills` | none |
 
 ## Hypothesis
-1. With skills, Hermes passes the 5 `skill-*` tasks much more often: they depend on made-up ACME rules
+1. With skills, Hermes passes the 6 skill-dependent tasks (`skill-*` and `hard-05`) much more often: they depend on made-up ACME rules
    (invoice ID format, late-fee rule, fiscal calendar, JSON schema, email style) that a model cannot know.
-2. On the other 14 tasks there is no significant difference.
+2. On the other 18 tasks there is no significant difference.
 3. Skills cost more tokens per trial (the skills index is added to the prompt, and `skill_view` adds a step).
 
-Prediction: overall difference A − B of about +15 to +20 points, with the 95% CI above 0, all of it coming from `skill-*`.
+Prediction: overall difference A − B of about +15 to +20 points, with the 95% CI above 0, all of it coming from the skill-dependent tasks.
 
 ## Setup
-- 19 tasks × N=5 trials × 2 configs = 190 trials. `mem-01`/`mem-02` are excluded: memory is off in both configs, so
-  they can only fail, and with skills on, Hermes was seen saving the fact as a skill instead, which would blur the one axis. Why N=5: see `docs/DESIGN.md` §6.
+- 24 tasks × N=10 trials × 2 configs = 480 trials (≈ $0.45 on gpt-4o-mini, ≈ 1,700 requests). `mem-01`/`mem-02` are excluded: memory is off in both configs, so
+  they can only fail, and with skills on, Hermes was seen saving the fact as a skill instead, which would blur the one axis.
+- **Why N=10:** the power simulation in `docs/DESIGN.md` §6 shows N=5 detects a skills-sized effect only ~73% of the
+  time, and N=10 ~88%. If you are limited to a free model's daily request cap, N=5 (~850 requests) is the fallback;
+  say in the results that it is about 73% powered.
 - Hermes commit `611f0ab7`, task snapshot stored in the experiment row (id: `TODO`).
 
 Reproduce with the UI, or with curl:
@@ -36,8 +39,8 @@ B=http://localhost:3000/api; H='Content-Type: application/json'
 curl -XPOST $B/configs -H "$H" -d '{"name":"hermes-skills","harness":"hermes","model":"gpt-4o-mini","skills":["acme-billing","acme-style"],"tools":["file"]}'
 curl -XPOST $B/configs -H "$H" -d '{"name":"hermes-noskills","harness":"hermes","model":"gpt-4o-mini","tools":["file"]}'
 # all tasks except mem-01 / mem-02 (see Setup above)
-curl -XPOST $B/experiments -H "$H" -d '{"name":"skills on vs off","config_ids":["hermes-skills@v1","hermes-noskills@v1"],"trials_per_task":5,
-  "task_ids":["arith-01","arith-02","code-01","code-02","code-03","code-04","date-01","file-01","file-02","file-03","judge-01","judge-02","logic-01","skill-01","skill-02","skill-03","skill-04","skill-05","text-01"]}'
+curl -XPOST $B/experiments -H "$H" -d '{"name":"skills on vs off","config_ids":["hermes-skills@v1","hermes-noskills@v1"],"trials_per_task":10,
+  "task_ids":["arith-01","arith-02","code-01","code-02","code-03","code-04","date-01","file-01","file-02","file-03","judge-01","judge-02","logic-01","skill-01","skill-02","skill-03","skill-04","skill-05","text-01","hard-01","hard-02","hard-03","hard-04","hard-05"]}'
 ```
 
 ## Judge validation (run first)

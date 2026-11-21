@@ -73,6 +73,7 @@ const progress = computed(() => {
   return `${done} / ${all} trials finished`;
 });
 
+const num = (x: number) => (Number.isFinite(x) ? x.toFixed(1) : '–');
 const ci = (c: number[]) => `[${pct(c[0])}, ${pct(c[1])}]`;
 const signedPct = (x: number) => (x > 0 ? '+' : '') + pct(x);
 const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.done ? 'pass' : cell.passed === 0 ? 'fail' : 'warn');
@@ -92,6 +93,8 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
     <table>
       <tr><th>Config</th><th class="num">Pass rate</th><th>95% CI (bootstrap over tasks)</th><th class="num">Avg cost / trial</th>
         <th class="num">Total cost</th><th class="num">Avg latency</th><th class="num">p90 latency</th><th class="num">Avg tokens</th>
+        <th class="num" title="model calls per trial, all sessions">LLM calls / trial</th>
+        <th class="num" title="user turns (sessions) per trial; 2 for memory tasks">User turns / trial</th>
         <th class="num">Done / errors / stopped</th><th>Failure categories</th><th></th></tr>
       <tr v-for="s in exp.summaries" :key="s.config_id">
         <td><strong>{{ s.config_id }}</strong></td>
@@ -99,6 +102,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
         <td class="num">{{ usd(s.avg_cost_usd) }}</td><td class="num">{{ usd(s.total_cost_usd) }}</td>
         <td class="num">{{ secs(s.avg_latency_ms) }}</td><td class="num">{{ secs(s.p90_latency_ms) }}</td>
         <td class="num">{{ Math.round(s.avg_tokens) || '–' }}</td>
+        <td class="num">{{ num(s.avg_llm_calls) }}</td><td class="num">{{ num(s.avg_turns) }}</td>
         <td class="num">{{ s.trials_done }} / <span :class="{ warn: s.trials_error }">{{ s.trials_error }}</span> / {{ s.trials_cancelled }}</td>
         <td><span v-for="(n, k) in s.failures" :key="k" style="margin-right: 8px">{{ k }}: {{ n }}</span></td>
         <td><button v-if="s.trials_pending" @click="stop(s.config_id)" style="background: var(--fail); font-size: 12px">Stop this config</button></td>
@@ -144,7 +148,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
       </div>
     </div>
 
-    <h3>Per-task results (passed / finished) — click a cell to list its trials below, then click a trial</h3>
+    <h3>Per-task results — passed / finished, then averages per trial (latency · LLM calls · user turns · cost). Click a cell to list its trials.</h3>
     <table>
       <tr><th>Task</th><th>Grader</th><th v-for="c in exp.configs" :key="c.id">{{ c.id }}</th></tr>
       <tr v-for="t in exp.tasks" :key="t.id">
@@ -155,6 +159,10 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
             {{ exp.matrix[t.id]?.[c.id]?.passed ?? 0 }} / {{ exp.matrix[t.id]?.[c.id]?.done ?? 0 }}
           </a>
           <span v-if="exp.matrix[t.id]?.[c.id]?.error" class="warn"> ({{ exp.matrix[t.id][c.id].error }} err)</span>
+          <div v-if="exp.matrix[t.id]?.[c.id]?.done" class="muted" style="font-size: 12px">
+            {{ secs(exp.matrix[t.id][c.id].avg_latency_ms) }} · {{ num(exp.matrix[t.id][c.id].avg_llm_calls) }} calls ·
+            {{ num(exp.matrix[t.id][c.id].avg_turns) }} turns · {{ usd(exp.matrix[t.id][c.id].avg_cost_usd) }}
+          </div>
         </td>
       </tr>
     </table>

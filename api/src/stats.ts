@@ -15,6 +15,8 @@ export interface TrialRow {
   input_tokens: number | null;
   output_tokens: number | null;
   failure_category: string | null;
+  llm_calls?: number | null;
+  turns?: number | null;
 }
 
 /** Small seeded RNG so results are reproducible. */
@@ -89,6 +91,8 @@ export function summarize(trials: TrialRow[], configId: string) {
     avg_latency_ms: mean(latencies),
     p90_latency_ms: latencies[Math.floor(latencies.length * 0.9)] ?? NaN,
     avg_tokens: mean(done.map((t) => (t.input_tokens ?? 0) + (t.output_tokens ?? 0))),
+    avg_llm_calls: mean(done.map((t) => t.llm_calls ?? 0)),   // model calls per trial
+    avg_turns: mean(done.map((t) => t.turns ?? 0)),           // user turns (sessions) per trial
     failures,
   };
 }

@@ -206,7 +206,7 @@ provider detection based on the URL. It should accept any OpenAI-compatible URL,
   platform bug. Now fixed: provider errors end as `error`, are excluded from the statistics, and are shown as a count.
 - **Exact match was too strict.** "The trip is 215 minutes." failed against expected `215`. The answer tasks now ask for
   `{"answer": ...}` and the grader extracts that field.
-- **The judge was unstable at temperature 0.** The same answer got 3 passes and 4 fails. Full story in `docs/internal/JUDGE_VALIDATION.md`.
+- **The judge was unstable at temperature 0.** The same answer got 3 passes and 4 fails. Full story in `docs/JUDGE_VALIDATION.md`.
 - **The memory tasks made no sense in a skills experiment** (memory was off in both configs), so they are now excluded.
 - Good trajectories to show: `e181b969-39` vs `-38` (skill-05), and `-115` vs `-30` (skill-01).
 
@@ -309,3 +309,68 @@ By reader:
 - `DESIGN` is for engineers.
 
 Interview and build notes go in `docs/internal/`, so a customer never sees "interview cheat sheet".
+
+---
+
+## 12. Metrics, leaks, hard tasks, and the statistics question
+
+**Q: Can the trajectory show how long each step took?**
+Yes. Every event has a timestamp, and the trial page shows on the right how long each step took (the time since
+the previous event):
+- "model call 1.4s" on an ASSISTANT event is the LLM latency;
+- "tool 0.3s" on a TOOL RESULT is the tool's run time;
+- "harness setup" on the first USER event is Hermes building its agent (~3–4 s).
+
+Hermes' adapter used to stamp every event with the moment it converted the messages, so every step showed 0 s. It
+now keeps Hermes' own per-message timestamps.
+
+**Q: Can the per-config table and the per-task table show turns, latency and cost?**
+Yes:
+- per config: **LLM calls / trial** (model turns) and **user turns / trial** (sessions);
+- per task cell: average latency, LLM calls, user turns and cost per trial.
+
+Both counts are stored per trial (`llm_calls`, `turns` columns); older databases are migrated and backfilled from
+the stored traces on startup.
+
+**Q: The code-01 trajectory seemed to use the same unit tests as the grader. Are we leaking them?**
+No. Checked three ways:
+1. The harness receives the task **without** the grader (`agent_view()`; a test asserts it).
+2. The test file is written into the workspace only **after** the harness returns; a new test asserts the workspace
+   holds only the setup files while the agent runs.
+3. In the first real run, none of the 6 code-01 trajectories contained our test strings or the test file.
+
+What you most likely saw: the model writing its own checks with **textbook examples** ("A man, a plan, a canal:
+Panama" is *the* classic palindrome). Our hidden tests used the same textbook cases, so they *looked* leaked. That is
+**contamination**, not leakage: tests built from famous examples overlap with what the model memorized. Fix applied:
+each coding task's hidden tests now include unusual cases (e.g. `"Zq7!--7Q z"`) that a model cannot recite.
+
+**Q: Add 5 hard tasks.** `hard-01` to `hard-05`; every expected answer was computed by a script, not by hand:
+
+| Task | What makes it hard | Grader |
+|------|--------------------|--------|
+| hard-01 | messy CSV: duplicate ids, refunds, voids, 3 currencies → net USD per region | file JSON equality |
+| hard-02 | interleaved log: pair START/END per request, ignore unfinished requests and stray ENDs (decoys) | exact |
+| hard-03 | TTL + LRU cache with an injected clock (expiry boundary, expired-first eviction, update resets TTL) | hidden unit tests |
+| hard-04 | two bugs in two files against a README spec; fixing only one still fails | hidden unit tests |
+| hard-05 | batch report applying 3 ACME skill rules to 4 invoices (incl. the late-fee cap and a fiscal year boundary) | file JSON equality |
+
+For hard-03 and hard-04, a reference solution passes, and the shipped buggy code (or a half-fix) fails.
+
+**Q: "The statistical method, and how you chose N" — how do I answer this?**
+*Method (30 seconds):*
+1. The task is the unit, because trials of the same task are correlated.
+2. Average the N trials of each task into a pass rate per config.
+3. Take the per-task difference A − B: it's paired, so task difficulty cancels.
+4. Bootstrap over tasks for a 95% CI of the mean difference.
+5. If the CI is above 0, A is better; if it includes 0, "no significant difference", which the UI calls possible noise.
+
+*How N was chosen:* by simulation, with `worker/power_analysis.py`. It runs the same method on fake experiments where
+I know the truth:
+- **No real difference** → it declares a winner ~5% of the time. That shows the method is **calibrated**.
+- **Skills-sized effect** → detected 73% of the time at N=5 and 88% at N=10. The usual target is 80%, so **N=10** for the reported experiment.
+- **Small effects** (+7 points on average) → only 64% even at N=10. More **tasks** is what helps; more trials does not.
+
+*If pushed:*
+- Why not McNemar? There is no natural pairing of trial *i* of A with trial *i* of B.
+- Why not a z-test on all trials? Treating correlated trials as independent makes the CI too narrow.
+- What does "no significant difference" mean? "Not detected at this power", not "equal".

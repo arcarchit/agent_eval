@@ -271,3 +271,23 @@ def test_baseline_reads_a_skill(tmp_path):
     result = [e for e in trace.events if e["type"] == "tool_result"][0]
     assert not result["error"] and "Invoice ID" in result["output"]
     assert "acme-billing" in h.client.requests[0]["messages"][0]["content"]  # listed in the system prompt
+
+
+def test_hidden_unit_tests_are_not_in_the_workspace_during_the_run(monkeypatch):
+    """The agent's workspace holds only setup files while it runs; the test file appears only for grading."""
+    import run_trial
+    seen = {}
+
+    class Spy:
+        def run(self, task, config, model, workspace, home):
+            seen["files"] = sorted(p.name for p in workspace.iterdir())
+            (workspace / "solution.py").write_text("def add(a, b):\n    return a + b\n")
+            return Trace(final_answer="done")
+
+    monkeypatch.setattr(run_trial, "get_harness", lambda name: Spy())
+    monkeypatch.setattr(run_trial, "get_model", lambda name, spec=None: MODEL)
+    task = {"id": "t", "prompt": "p", "setup_files": {"data.csv": "a,b"},
+            "grader": {"type": "unit_test", "test_code": "from solution import add\nassert add(2, 2) == 4\n"}}
+    out = run_trial.run({"task": task, "config": {"harness": "spy", "model": "fake"}})
+    assert seen["files"] == ["data.csv"]          # no _eval_test.py while the agent runs
+    assert out["passed"]

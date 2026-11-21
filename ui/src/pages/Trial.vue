@@ -8,6 +8,17 @@ const props = defineProps<{ id: string }>();
 const t = ref<any>(null);
 onMounted(async () => (t.value = await api('/trials/' + props.id)));
 
+// Duration of each step = time since the previous event. For an ASSISTANT event that is the model call's
+// latency; for a TOOL RESULT it is how long the tool ran.
+function duration(idx: number | string): string {
+  const i = Number(idx);
+  const ev = t.value.trace.events;
+  if (i === 0 || !ev[i].ts || !ev[i - 1].ts) return '';
+  const d = ev[i].ts - ev[i - 1].ts;
+  return d >= 0.05 ? d.toFixed(1) + 's' : '';
+}
+const stepKind: Record<string, string> = { assistant: 'model call', tool_result: 'tool', user: 'harness setup' };
+
 const label: Record<string, string> = {
   session_start: 'NEW SESSION', user: 'USER', assistant: 'ASSISTANT', tool_call: 'TOOL CALL',
   tool_result: 'TOOL RESULT', memory_read: 'MEMORY READ', memory_write: 'MEMORY WRITE', skill_used: 'SKILL USED',
@@ -44,12 +55,14 @@ const color: Record<string, string> = {
     </div>
 
     <template v-if="t.trace">
-      <h3>Trajectory <span class="muted">({{ t.trace.steps }} model calls in last session, stop reason: {{ t.trace.stop_reason }})</span></h3>
+      <h3>Trajectory <span class="muted">({{ t.llm_calls ?? '?' }} LLM calls, {{ t.turns ?? '?' }} user turn(s), stop reason: {{ t.trace.stop_reason }};
+        times on the right = duration of each step)</span></h3>
       <div v-for="(e, i) in t.trace.events" :key="i" class="card" :style="{ borderLeft: '4px solid ' + color[e.type] }">
         <strong :style="{ color: color[e.type] }">{{ label[e.type] ?? e.type }}</strong>
         <span v-if="e.name"> · {{ e.name }}</span>
         <span v-if="e.error" class="error"> · error</span>
         <span v-if="e.stop_reason" :class="e.stop_reason === 'completed' ? 'muted' : 'warn'"> · {{ e.stop_reason }}</span>
+        <span v-if="duration(i)" class="muted" style="float: right">{{ stepKind[e.type] ?? 'after' }} {{ duration(i) }}</span>
         <pre v-if="e.content">{{ e.content }}</pre>
         <pre v-if="e.arguments" class="muted">{{ e.arguments }}</pre>
         <pre v-if="e.output">{{ e.output }}</pre>

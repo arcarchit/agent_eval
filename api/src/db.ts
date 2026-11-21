@@ -41,10 +41,25 @@ export function openDb(path = DB_PATH): DatabaseSync {
       grader TEXT, trace TEXT, error TEXT,
       input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL, judge_cost_usd REAL, latency_ms INTEGER,
       finished_at TEXT,
+      llm_calls INTEGER,              -- model calls in the trial (all sessions)
+      turns INTEGER,                  -- user turns (sessions)
       UNIQUE (experiment_id, config_id, task_id, trial_index)
     );
   `);
+  migrate(db);
   return db;
 }
 
 export const now = () => new Date().toISOString();
+
+/** Add columns introduced after a database was created, and backfill them from stored traces. */
+function migrate(db: DatabaseSync) {
+  const cols = (db.prepare(`PRAGMA table_info(trials)`).all() as { name: string }[]).map((c) => c.name);
+  for (const col of ['llm_calls', 'turns']) {
+    if (!cols.includes(col)) db.exec(`ALTER TABLE trials ADD COLUMN ${col} INTEGER`);
+  }
+  const count = (type: string) =>
+    `(SELECT COUNT(*) FROM json_each(trials.trace, '$.events') WHERE json_extract(value, '$.type') = '${type}')`;
+  db.exec(`UPDATE trials SET llm_calls = ${count('assistant')}, turns = ${count('session_start')}
+           WHERE llm_calls IS NULL AND trace IS NOT NULL`);
+}
