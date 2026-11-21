@@ -153,7 +153,7 @@ It's deleted after every trial. To inspect one, run the CLI with `--keep` (secti
 **Q: Can I send a prompt from the command line and see the response?**
 Yes, with `worker/cli.py`:
 ```bash
-docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
+docker compose run --rm evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
 docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes --skills acme-billing --task skill-01 --keep
 ```
 It prints every trace event, the final answer, tokens and cost, plus the grade when you use `--task`.
@@ -249,3 +249,25 @@ comparison table now pairs them by task (`POST /api/experiments/:id/configs`). T
 table with its errors, and you just pick A = working config and B = `v2`.
 Caveat to mention: the two configs ran at different times, so if the provider changed the model in between, that is
 not controlled for. For a final, clean result, run both configs together in one fresh experiment. Use reuse to save money while iterating.
+
+---
+
+## 10. Running it
+
+**Q: `docker compose exec ...` says `service "evals" is not running`.**
+`exec` runs a command *inside a container that is already running*. The container wasn't up: either it was never
+started, it was stopped, or it crashed on start.
+- Check it: `docker compose ps -a`. If the status is `Exited`, see why with `docker compose logs evals`.
+- Start it in the background, then use `exec`: `docker compose up -d`.
+- Or don't depend on it: `docker compose run --rm evals <command>` starts a throwaway container just for that
+  command and removes it afterwards. Same image, same `.env`, same mounted files.
+
+**Q: How do I run it without Docker?**
+`./scripts/run-local.sh` (needs `brew install node@22 uv`). It:
+1. installs Hermes at the pinned commit into `~/hermes-agent/.venv`, the first time only (uv downloads Python 3.14 itself);
+2. loads `.env`;
+3. sets `PYTHONPATH` (so Python finds Hermes) and `WORKER_CMD` (which Python runs the trials);
+4. builds the UI and the API, then starts on http://localhost:3000.
+
+`./scripts/run-local.sh cli "prompt"` runs one prompt with no server. These are the same environment variables the
+Dockerfile sets; the script just sets them on your Mac instead of inside the container.

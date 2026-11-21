@@ -34,24 +34,25 @@ time, so edits apply to the next config or experiment without a restart. `.env` 
 `docker compose up -d`; note that `docker compose restart` does not re-read `.env`. Code changes (`api/`, `ui/`,
 `worker/`) and `Dockerfile` changes need `docker compose up --build`. A restart is safe: interrupted trials resume.
 
-## Run without Docker (development)
+## Run without Docker
 
 ```bash
-# worker (Python 3.11+); Hermes needs Python 3.14 and its own lockfile:
-git clone https://github.com/NousResearch/hermes-agent /opt/hermes && cd /opt/hermes \
-  && git checkout 611f0ab757b307774c4a63c7b19f67d1f3aa6f6e && uv sync --frozen && uv pip install pyyaml
-pip install -r worker/requirements.txt          # enough for the baseline harness and the tests
-
-cd api && npm install && npm run build
-PYTHONPATH=/opt/hermes WORKER_CMD="/opt/hermes/.venv/bin/python ../worker/run_trial.py" npm start   # :3000
-cd ui && npm install && npm run dev                                                                  # :5173
+brew install node@22 uv            # macOS; on Linux install Node >= 22.13 and uv
+cp .env.example .env               # add OPENROUTER_API_KEY
+./scripts/run-local.sh             # first run installs Hermes into ~/hermes-agent (a few minutes), then http://localhost:3000
+./scripts/run-local.sh cli "What is 17% of 2340?"          # one prompt through Hermes, no server needed
 ```
+The script installs Hermes (same pinned commit as Docker) into its own virtualenv, loads `.env`, builds the UI and
+the API, and starts the API, which serves the UI. Set `HERMES_DIR` to install Hermes elsewhere. The repo path must not
+contain spaces. For hot-reloading UI work, also run `cd ui && npm run dev` (http://localhost:5173).
 
 ## Try one prompt from the terminal
 
 ```bash
-# inside Docker
-docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
+# without Docker
+./scripts/run-local.sh cli --harness hermes "What is 17% of 2340?"
+# with Docker: `exec` needs the container running (docker compose up -d); `run --rm` starts a one-off container instead
+docker compose run --rm evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes "What is 17% of 2340?"
 docker compose exec evals /opt/hermes/.venv/bin/python /app/worker/cli.py --harness hermes --skills acme-billing --task skill-01 --keep
 ```
 It prints every trace event, the final answer, tokens and cost (and the grade when you pass `--task`).
