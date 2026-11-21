@@ -50,9 +50,9 @@ API would need a small proxy such as LiteLLM. This is an assumption, not code in
 
 | Table | Key fields | Notes |
 |-------|-----------|-------|
-| `configs` | `id = name@vN`, `spec` (JSON), `spec_hash` | **Immutable.** Saving new settings under the same name creates `vN+1`. The same settings return the existing version. |
+| `configs` | `id = name@vN`, `spec` (JSON), `spec_hash` | **Immutable.** Saving new settings under the same name creates `vN+1`. The same settings return the existing version. The spec includes a **snapshot of the model's `models.yaml` entry** (`model_spec`), so editing `models.yaml` never changes what an existing config runs. |
 | `experiments` | `config_ids`, `tasks` (JSON snapshot), `trials_per_task` | The full task definitions are copied in, so editing a task file later does not change a past experiment. |
-| `trials` | `(experiment, config, task, trial_index)` unique, `status`, `attempts`, `passed`, `score`, `failure_category`, `grader` (JSON), `trace` (JSON), tokens, cost, latency, `error` | One row per run. Written in a single UPDATE when finished. |
+| `trials` | `(experiment, config, task, trial_index)` unique, `status` (pending/running/done/error/cancelled), `attempts`, `passed`, `score`, `failure_category`, `grader` (JSON), `trace` (JSON), tokens, cost, latency, `error` | One row per run. Written in a single UPDATE when finished. |
 
 Tasks, skills and models are files in git, so they are versioned by git. Hermes is pinned to a commit in the Dockerfile.
 
@@ -71,6 +71,11 @@ Tasks, skills and models are files in git, so they are versioned by git. Hermes 
   credits, 401 bad key) ends the trial as `error` immediately and is **never graded**; a timeout kills the process and scores the trial as a
   failure (`timeout`); a crash or exhausted retries gives `status = error`, which is **excluded** from statistics
   and shown as its own count. On API restart, `running` trials go back to `pending` and resume.
+- **Stopping and reuse**: `POST /experiments/:id/cancel` (optionally for one config) marks pending trials `cancelled`;
+  running ones finish. A **circuit breaker** cancels a config automatically when its first 3 finished trials are all
+  errors (wrong model id, bad key, no credits). `POST /experiments/:id/configs` adds a config to an existing
+  experiment on the same task snapshot and N, so a fixed config can be compared against data that already exists.
+  Caveat: the two configs then ran at different times, so provider-side drift between the runs is not controlled.
 
 ## 5. Graders and how they were validated
 

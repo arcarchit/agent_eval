@@ -209,3 +209,43 @@ provider detection based on the URL. It should accept any OpenAI-compatible URL,
 - **The judge was unstable at temperature 0.** The same answer got 3 passes and 4 fails. Full story in `docs/JUDGE_VALIDATION.md`.
 - **The memory tasks made no sense in a skills experiment** (memory was off in both configs), so they are now excluded.
 - Good trajectories to show: `e181b969-39` vs `-38` (skill-05), and `-115` vs `-30` (skill-01).
+
+---
+
+## 9. Operating experiments
+
+**Q: I started an experiment with a wrong OpenRouter model id. How do I stop it?**
+- **Stop experiment** at the top of the experiment page, or **Stop this config** in that config's row.
+  Pending trials become `cancelled` and never run; running ones finish; finished trials are kept.
+  (API: `POST /api/experiments/:id/cancel`, with an optional `{"config_id": "..."}`.)
+- **Automatic**: a wrong model id makes the provider reject every call. Those trials end as `error`, never graded, and cost $0. After a config's
+  first 3 finished trials are all errors, a **circuit breaker** stops the rest of that config by itself
+  (`maybeTripBreaker` in `api/src/runner.service.ts`, threshold `BREAKER_ERRORS`).
+- In the interview: *"failing fast on a misconfigured config protects both budget and time; the breaker only trips
+  when nothing has succeeded, so a few transient errors in a healthy config don't stop it."*
+
+**Q: If I change `models.yaml`, do I need to restart Docker? When do I need to restart?**
+
+| Change | What to do | Why |
+|--------|------------|-----|
+| `models.yaml`, `tasks/*.yaml`, `skills/` | Nothing. Just refresh the UI. | These are mounted into the container (`docker-compose.yml`) and read fresh on every request and every trial. |
+| `.env` (API keys, `MAX_CONCURRENCY`) | `docker compose up -d` | Environment variables are set when the container is created. `docker compose restart` does **not** re-read `.env`. |
+| Code in `api/`, `ui/`, `worker/`, or the `Dockerfile` | `docker compose up --build` | The code is copied into the image at build time. |
+
+A restart is safe at any time: trials that were running go back to `pending` and run again.
+**Important:** editing a model in `models.yaml` does **not** change existing configs. Each config stores a snapshot
+of its model entry when it is saved (`model_spec`). To use the corrected model id, save the config again: same name,
+same settings. That creates a **new version** (`name@v2`), because the snapshot changed. This keeps every past result
+pointing at exactly the model that produced it.
+
+**Q: Of two configs, one worked and one didn't. Can I reuse the working config's data?**
+Yes:
+1. Fix the model id in `models.yaml`.
+2. Save the broken config again to get `name@v2`.
+3. Open the old experiment and use **Add a config to this experiment**.
+
+The new config runs on the **same task snapshot and N**. The working config's finished trials are kept, and the
+comparison table now pairs them by task (`POST /api/experiments/:id/configs`). The broken `v1` stays in the
+table with its errors, and you just pick A = working config and B = `v2`.
+Caveat to mention: the two configs ran at different times, so if the provider changed the model in between, that is
+not controlled for. For a final, clean result, run both configs together in one fresh experiment. Use reuse to save money while iterating.

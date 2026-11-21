@@ -35,7 +35,7 @@ export function openDb(path = DB_PATH): DatabaseSync {
       config_id TEXT NOT NULL,
       task_id TEXT NOT NULL,
       trial_index INTEGER NOT NULL,
-      status TEXT NOT NULL,           -- pending | running | done | error
+      status TEXT NOT NULL,           -- pending | running | done | error | cancelled
       attempts INTEGER NOT NULL DEFAULT 0,
       passed INTEGER, score REAL, failure_category TEXT,
       grader TEXT, trace TEXT, error TEXT,

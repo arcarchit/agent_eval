@@ -6,6 +6,7 @@
 //  - exit code 2 (rate limit / provider outage) is retried with exponential backoff
 //  - after MAX_ATTEMPTS, or on a crash, the trial is marked "error": it is EXCLUDED from the
 //    statistics (not counted as a fail) and shown separately, so outages do not corrupt results
+//  - a trial cancelled while queued is skipped; a running one finishes (killing it would waste the spend)
 //  - every trial result is written in one UPDATE, and on startup "running" trials go back to
 //    "pending" and resume, so a crash of the API never leaves half-written results
 import { Injectable, OnModuleInit } from '@nestjs/common';
@@ -16,6 +17,9 @@ import { now } from './db';
 const MAX_CONCURRENCY = Number(process.env.MAX_CONCURRENCY ?? 4);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS ?? 4);
 const BACKOFF_MS = Number(process.env.BACKOFF_MS ?? 2000);
+// Circuit breaker: if a config's first N finished trials are ALL errors (wrong model id, bad key,
+// no credits), cancel the rest of that config instead of burning through hundreds of failing trials.
+const BREAKER_ERRORS = Number(process.env.BREAKER_ERRORS ?? 3);
 const workerCmd = () => (process.env.WORKER_CMD ?? 'python3 ../worker/run_trial.py').split(' ');
 
 export interface WorkerResult {
@@ -87,6 +91,7 @@ export class Runner implements OnModuleInit {
 
   private async runTrial(id: string) {
     const trial = this.db.prepare(`SELECT * FROM trials WHERE id = ?`).get(id) as any;
+    if (trial.status !== 'pending') return; // cancelled while it waited in the queue
     const exp = this.db.prepare(`SELECT * FROM experiments WHERE id = ?`).get(trial.experiment_id) as any;
     const config = this.db.prepare(`SELECT * FROM configs WHERE id = ?`).get(trial.config_id) as any;
     const task = JSON.parse(exp.tasks).find((t: any) => t.id === trial.task_id);
@@ -124,11 +129,21 @@ export class Runner implements OnModuleInit {
     this.db
       .prepare(`UPDATE trials SET ${cols.map((c) => `${c} = ?`).join(', ')}, finished_at = ? WHERE id = ?`)
       .run(...(Object.values(fields) as any[]), now(), id);
-    const trial = this.db.prepare(`SELECT experiment_id FROM trials WHERE id = ?`).get(id) as any;
+    const trial = this.db.prepare(`SELECT experiment_id, config_id FROM trials WHERE id = ?`).get(id) as any;
+    if (fields.status === 'error') this.maybeTripBreaker(trial.experiment_id, trial.config_id);
     this.db
       .prepare(`UPDATE experiments SET status = 'done' WHERE id = ? AND NOT EXISTS
                 (SELECT 1 FROM trials WHERE experiment_id = ? AND status IN ('pending','running'))`)
       .run(trial.experiment_id, trial.experiment_id);
+  }
+
+  private maybeTripBreaker(experimentId: string, configId: string) {
+    const c = this.db.prepare(`SELECT SUM(status = 'error') AS errors, SUM(status = 'done') AS done
+      FROM trials WHERE experiment_id = ? AND config_id = ?`).get(experimentId, configId) as any;
+    if (c.done === 0 && c.errors >= BREAKER_ERRORS) {
+      this.db.prepare(`UPDATE trials SET status = 'cancelled', error = 'circuit breaker: first trials of this config all errored'
+        WHERE experiment_id = ? AND config_id = ? AND status = 'pending'`).run(experimentId, configId);
+    }
   }
 }
 

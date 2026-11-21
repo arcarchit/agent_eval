@@ -36,8 +36,10 @@ def load_models() -> dict:
     return yaml.safe_load((ROOT / "models.yaml").read_text())
 
 
-def get_model(name: str) -> Model:
-    spec = load_models()["models"][name]
+def get_model(name: str, spec: dict | None = None) -> Model:
+    """`spec` is the snapshot stored in the config (preferred, so a config always means the same model).
+    Without it (CLI, judge), the current models.yaml entry is used."""
+    spec = spec or load_models()["models"][name]
     return Model(
         name=name,
         provider_model=spec["provider_model"],

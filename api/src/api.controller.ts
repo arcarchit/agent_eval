@@ -3,7 +3,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { Response } from 'express';
-import { HARNESSES, TOOLSETS, loadModels, loadSkills, loadTasks } from './catalog';
+import { HARNESSES, TOOLSETS, loadModelSpecs, loadModels, loadSkills, loadTasks } from './catalog';
 import { now } from './db';
 import { Runner } from './runner.service';
 import { compare, summarize, TrialRow } from './stats';
@@ -20,10 +20,16 @@ export function normalizeSpec(body: any) {
     max_steps: Number(body.max_steps ?? 10),
     max_tokens: Number(body.max_tokens ?? 1024),
     timeout_s: Number(body.timeout_s ?? 300),
+    // Snapshot of the model's models.yaml entry. A config must not change meaning when models.yaml is
+    // edited (e.g. fixing a wrong provider_model): the fix gives a different hash, so a new version.
+    model_spec: null as null | Record<string, unknown>,
   };
+  const m = loadModelSpecs()[spec.model];
   const errors = [];
   if (!HARNESSES.includes(spec.harness)) errors.push(`harness must be one of ${HARNESSES}`);
-  if (!loadModels().includes(spec.model)) errors.push(`unknown model ${spec.model}`);
+  if (!m) errors.push(`unknown model ${spec.model}`);
+  else spec.model_spec = { provider_model: m.provider_model, base_url: m.base_url,
+                           api_key_env: m.api_key_env, price_per_mtok: m.price_per_mtok };
   for (const s of spec.skills) if (!loadSkills().includes(s)) errors.push(`unknown skill ${s}`);
   for (const t of spec.tools) if (!TOOLSETS.includes(t)) errors.push(`unknown toolset ${t}`);
   if (spec.max_steps < 1 || spec.timeout_s < 1) errors.push('max_steps and timeout_s must be >= 1');
@@ -69,7 +75,8 @@ export class ApiController {
   listExperiments() {
     return this.db.prepare(`
       SELECT e.id, e.name, e.config_ids, e.trials_per_task, e.status, e.created_at,
-             COUNT(t.id) AS total, SUM(t.status = 'done') AS done, SUM(t.status = 'error') AS errors
+             COUNT(t.id) AS total, SUM(t.status = 'done') AS done, SUM(t.status = 'error') AS errors,
+             SUM(t.status = 'cancelled') AS cancelled
       FROM experiments e LEFT JOIN trials t ON t.experiment_id = e.id
       GROUP BY e.id ORDER BY e.created_at DESC`).all()
       .map((e: any) => ({ ...e, config_ids: JSON.parse(e.config_ids) }));
@@ -94,6 +101,48 @@ export class ApiController {
   rerun(@Param('id') id: string) {
     const e = this.getExperimentRow(id);
     return this.startExperiment(`${e.name} (rerun)`, JSON.parse(e.config_ids), JSON.parse(e.tasks), e.trials_per_task);
+  }
+
+  /** Stop: pending trials become "cancelled" and are never run. Running trials finish normally.
+   *  Pass config_id to stop only one config (e.g. it has a wrong model id), or nothing to stop all. */
+  @Post('experiments/:id/cancel')
+  cancel(@Param('id') id: string, @Body() body: any) {
+    this.getExperimentRow(id);
+    const where = body?.config_id ? `AND config_id = ?` : '';
+    const args = body?.config_id ? [id, body.config_id] : [id];
+    const r = this.db.prepare(`UPDATE trials SET status = 'cancelled' WHERE experiment_id = ? AND status = 'pending' ${where}`).run(...args);
+    this.db.prepare(`UPDATE experiments SET status = 'done' WHERE id = ? AND NOT EXISTS
+                     (SELECT 1 FROM trials WHERE experiment_id = ? AND status IN ('pending','running'))`).run(id, id);
+    return { cancelled: Number(r.changes) };
+  }
+
+  /** Reuse finished data: run one more config on the SAME task snapshot and N, inside the same experiment.
+   *  Typical use: one config failed (wrong model id); fix it as a new config version and add it here,
+   *  instead of re-running the config that already worked. */
+  @Post('experiments/:id/configs')
+  addConfig(@Param('id') id: string, @Body() body: any) {
+    const e = this.getExperimentRow(id);
+    const configId = String(body?.config_id ?? '');
+    if (!this.db.prepare(`SELECT 1 FROM configs WHERE id = ?`).get(configId)) throw new BadRequestException(`unknown config ${configId}`);
+    const configIds: string[] = JSON.parse(e.config_ids);
+    if (configIds.includes(configId)) throw new BadRequestException(`${configId} is already in this experiment`);
+    const tasks = JSON.parse(e.tasks);
+    const start = (this.db.prepare(`SELECT COUNT(*) AS n FROM trials WHERE experiment_id = ?`).get(id) as any).n;
+    const insert = this.db.prepare(
+      `INSERT INTO trials (id, experiment_id, config_id, task_id, trial_index, status) VALUES (?, ?, ?, ?, ?, 'pending')`);
+    const ids: string[] = [];
+    this.db.exec('BEGIN');
+    for (let i = 0; i < e.trials_per_task; i++)
+      for (const task of tasks) {
+        const tid = `${id}-${start + ids.length}`;
+        insert.run(tid, id, configId, task.id, i);
+        ids.push(tid);
+      }
+    this.db.prepare(`UPDATE experiments SET config_ids = ?, status = 'running' WHERE id = ?`)
+      .run(JSON.stringify([...configIds, configId]), id);
+    this.db.exec('COMMIT');
+    this.runner.enqueue(ids);
+    return { id, added: ids.length };
   }
 
   private startExperiment(name: string, configIds: string[], tasks: any[], n: number) {
@@ -125,6 +174,7 @@ export class ApiController {
     // matrix[task][config] = {passed, done, error, pending}
     const matrix: Record<string, Record<string, Record<string, number>>> = {};
     for (const t of trials) {
+      if (t.status === 'cancelled') continue;
       const cell = ((matrix[t.task_id] ??= {})[t.config_id] ??= { passed: 0, done: 0, error: 0, pending: 0 });
       if (t.status === 'done') { cell.done++; cell.passed += t.passed ? 1 : 0; }
       else if (t.status === 'error') cell.error++;

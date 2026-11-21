@@ -24,6 +24,15 @@ Then:
 3. Open the experiment: the pass rate with its 95% CI, the A-vs-B verdict, per-task deltas, cost and latency.
 4. Click a cell in the per-task table, then a trial, to see its full trajectory and why it passed or failed.
 5. Export the results as JSON or CSV with the links at the top of the experiment page.
+6. **Stop** a running experiment (or one config) with the buttons on the experiment page. A config whose first
+   3 trials all error, for example because of a wrong model id, is stopped automatically.
+7. **Reuse results**: if one config failed, fix it (a new version), then use "Add a config to this experiment".
+   It runs on the same tasks and N, and the finished trials of the other config are kept.
+
+**What needs a restart?** `tasks/`, `skills/` and `models.yaml` are mounted into the container and read fresh each
+time, so edits apply to the next config or experiment without a restart. `.env` (API keys, `MAX_CONCURRENCY`) needs
+`docker compose up -d`; note that `docker compose restart` does not re-read `.env`. Code changes (`api/`, `ui/`,
+`worker/`) and `Dockerfile` changes need `docker compose up --build`. A restart is safe: interrupted trials resume.
 
 ## Run without Docker (development)
 

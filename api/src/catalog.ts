@@ -26,9 +26,14 @@ export function loadTasks(): Task[] {
     .map((f) => yaml.load(readFileSync(join(dir, f), 'utf8')) as Task);
 }
 
+/** models.yaml is read on every call, so edits apply without a restart. */
+export function loadModelSpecs(): Record<string, any> {
+  const doc = yaml.load(readFileSync(join(ROOT, 'models.yaml'), 'utf8')) as { models: Record<string, any> };
+  return doc.models ?? {};
+}
+
 export function loadModels(): string[] {
-  const doc = yaml.load(readFileSync(join(ROOT, 'models.yaml'), 'utf8')) as { models: Record<string, unknown> };
-  return Object.keys(doc.models);
+  return Object.keys(loadModelSpecs());
 }
 
 export function loadSkills(): string[] {

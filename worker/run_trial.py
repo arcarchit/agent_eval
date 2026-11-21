@@ -40,7 +40,7 @@ def run(job: dict) -> dict:
         for name, content in task.get("setup_files", {}).items():
             (workspace / name).write_text(content)
 
-        model = get_model(config["model"])
+        model = get_model(config["model"], config.get("model_spec"))
         start = time.time()
         trace = get_harness(config["harness"]).run(agent_view(task), config, model, workspace, home)
         latency_ms = int((time.time() - start) * 1000)

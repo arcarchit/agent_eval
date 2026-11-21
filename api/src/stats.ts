@@ -81,6 +81,7 @@ export function summarize(trials: TrialRow[], configId: string) {
     trials_done: done.length,
     trials_error: mine.filter((t) => t.status === 'error').length,
     trials_pending: mine.filter((t) => t.status === 'pending' || t.status === 'running').length,
+    trials_cancelled: mine.filter((t) => t.status === 'cancelled').length,
     pass_rate: mean(rates),
     pass_rate_ci: rates.length ? percentileCI(bootstrapMeans(rates)) : [NaN, NaN],
     avg_cost_usd: mean(done.map((t) => t.cost_usd ?? 0)),

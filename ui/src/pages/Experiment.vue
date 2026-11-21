@@ -37,6 +37,32 @@ async function openCell(task: string, config: string) {
   document.getElementById('trial-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Stop pending trials (all configs, or one). Running trials finish; finished data is kept.
+async function stop(configId?: string) {
+  const what = configId ? `pending trials of ${configId}` : 'all pending trials';
+  if (!confirm(`Stop ${what}? Finished trials are kept.`)) return;
+  await api(`/experiments/${props.id}/cancel`, configId ? { config_id: configId } : {});
+  await load();
+}
+
+// Reuse this experiment's finished trials: run one more config on the same tasks and N.
+const allConfigs = ref<any[]>([]);
+const addId = ref('');
+const addError = ref('');
+async function addConfig() {
+  addError.value = '';
+  try {
+    await api(`/experiments/${props.id}/configs`, { config_id: addId.value });
+    addId.value = '';
+    clearInterval(timer);
+    timer = window.setInterval(load, 3000); // it is running again
+    await load();
+  } catch (e: any) {
+    addError.value = e.message;
+  }
+}
+onMounted(async () => (allConfigs.value = await api('/configs')));
+
 const isSelected = (task: string, config: string) => selected.value?.task === task && selected.value?.config === config;
 
 const progress = computed(() => {
@@ -54,7 +80,9 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
 
 <template>
   <div v-if="exp">
-    <h2>{{ exp.name }} <span class="muted">{{ exp.id }} · N={{ exp.trials_per_task }} · {{ exp.status }} · {{ progress }}</span></h2>
+    <h2>{{ exp.name }} <span class="muted">{{ exp.id }} · N={{ exp.trials_per_task }} · {{ exp.status }} · {{ progress }}</span>
+      <button v-if="exp.status === 'running'" @click="stop()" style="margin-left: 12px; background: var(--fail)">Stop experiment</button>
+    </h2>
     <p>
       Export: <a :href="`/api/experiments/${id}/export?format=json`">JSON</a> ·
       <a :href="`/api/experiments/${id}/export?format=csv`">CSV</a>
@@ -64,20 +92,31 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
     <table>
       <tr><th>Config</th><th class="num">Pass rate</th><th>95% CI (bootstrap over tasks)</th><th class="num">Avg cost / trial</th>
         <th class="num">Total cost</th><th class="num">Avg latency</th><th class="num">p90 latency</th><th class="num">Avg tokens</th>
-        <th class="num">Done / errors</th><th>Failure categories</th></tr>
+        <th class="num">Done / errors / stopped</th><th>Failure categories</th><th></th></tr>
       <tr v-for="s in exp.summaries" :key="s.config_id">
         <td><strong>{{ s.config_id }}</strong></td>
         <td class="num">{{ pct(s.pass_rate) }}</td><td>{{ ci(s.pass_rate_ci) }}</td>
         <td class="num">{{ usd(s.avg_cost_usd) }}</td><td class="num">{{ usd(s.total_cost_usd) }}</td>
         <td class="num">{{ secs(s.avg_latency_ms) }}</td><td class="num">{{ secs(s.p90_latency_ms) }}</td>
         <td class="num">{{ Math.round(s.avg_tokens) || '–' }}</td>
-        <td class="num">{{ s.trials_done }} / <span :class="{ warn: s.trials_error }">{{ s.trials_error }}</span></td>
+        <td class="num">{{ s.trials_done }} / <span :class="{ warn: s.trials_error }">{{ s.trials_error }}</span> / {{ s.trials_cancelled }}</td>
         <td><span v-for="(n, k) in s.failures" :key="k" style="margin-right: 8px">{{ k }}: {{ n }}</span></td>
+        <td><button v-if="s.trials_pending" @click="stop(s.config_id)" style="background: var(--fail); font-size: 12px">Stop this config</button></td>
       </tr>
     </table>
-    <p class="muted" v-if="exp.summaries.some((s: any) => s.trials_error)">
-      Errored trials (provider outages after retries, crashes) are excluded from pass rates, not counted as failures.
+    <p class="muted" v-if="exp.summaries.some((s: any) => s.trials_error || s.trials_cancelled)">
+      Errored trials (wrong model id, no credits, outages after retries, crashes) and stopped trials are excluded from
+      pass rates, not counted as failures. A config whose first 3 trials all error is stopped automatically.
     </p>
+    <div class="row" style="margin-bottom: 12px">
+      <label>Add a config to this experiment (same tasks and N; finished trials are reused)
+        <select v-model="addId"><option value="" disabled>choose a config</option>
+          <option v-for="c in allConfigs.filter((c: any) => !exp.configs.some((x: any) => x.id === c.id))" :key="c.id">{{ c.id }}</option>
+        </select>
+      </label>
+      <button @click="addConfig" :disabled="!addId">Add and run</button>
+      <span class="error" v-if="addError">{{ addError }}</span>
+    </div>
 
     <div class="card" v-if="exp.configs.length >= 2">
       <div class="row">
