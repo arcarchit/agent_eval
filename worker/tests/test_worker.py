@@ -51,7 +51,8 @@ class FakeBaseline(BaselineHarness):
 
 def dirs(tmp_path):
     ws, home = tmp_path / "ws", tmp_path / "home"
-    ws.mkdir(), home.mkdir()
+    ws.mkdir(parents=True)
+    home.mkdir(parents=True)
     return ws, home
 
 
@@ -96,7 +97,7 @@ def test_baseline_tool_loop(tmp_path):
     trace = h.run({"prompt": "write it"}, {"tools": ["file"]}, MODEL, ws, home)
     assert (ws / "total.txt").read_text() == "775"
     assert trace.final_answer == "done"
-    assert trace.input_tokens == 20 and trace.steps == 2
+    assert trace.input_tokens == 20 and trace.llm_calls() == 2
     assert [e["type"] for e in trace.events] == [
         "session_start", "user", "assistant", "tool_call", "tool_result", "assistant", "session_end"]
 
@@ -291,3 +292,31 @@ def test_hidden_unit_tests_are_not_in_the_workspace_during_the_run(monkeypatch):
     out = run_trial.run({"task": task, "config": {"harness": "spy", "model": "fake"}})
     assert seen["files"] == ["data.csv"]          # no _eval_test.py while the agent runs
     assert out["passed"]
+
+
+def test_both_harnesses_send_identical_sampling_and_routing(tmp_path, monkeypatch):
+    """Fair comparison: temperature and provider routing come from ONE place (Model.request_params)."""
+    import dataclasses
+    import types
+    routing = {"quantizations": ["bf16"], "allow_fallbacks": False, "require_parameters": True}
+    model = dataclasses.replace(MODEL, routing=routing)
+
+    h = FakeBaseline([reply("ok")])
+    h.run({"prompt": "p"}, {"temperature": 0.3}, model, *dirs(tmp_path))
+    sent = h.client.requests[0]
+    assert sent["temperature"] == 0.3 and sent["extra_body"] == {"provider": routing}
+
+    captured = {}
+
+    class AIAgent:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+        def run_conversation(self, message):
+            return {"messages": [], "final_response": "ok"}
+
+    monkeypatch.setitem(sys.modules, "run_agent", types.SimpleNamespace(AIAgent=AIAgent))
+    monkeypatch.chdir(Path.cwd())
+    from harnesses.hermes import HermesHarness
+    HermesHarness().run({"prompt": "p"}, {"temperature": 0.3}, model, *dirs(tmp_path / "hermes"))
+    assert captured["request_overrides"] == {"temperature": 0.3, "extra_body": {"provider": routing}}

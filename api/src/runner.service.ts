@@ -132,10 +132,14 @@ export class Runner implements OnModuleInit {
       .run(...(Object.values(fields) as any[]), now(), id);
     const trial = this.db.prepare(`SELECT experiment_id, config_id FROM trials WHERE id = ?`).get(id) as any;
     if (fields.status === 'error') this.maybeTripBreaker(trial.experiment_id, trial.config_id);
-    this.db
-      .prepare(`UPDATE experiments SET status = 'done' WHERE id = ? AND NOT EXISTS
-                (SELECT 1 FROM trials WHERE experiment_id = ? AND status IN ('pending','running'))`)
-      .run(trial.experiment_id, trial.experiment_id);
+    this.markDoneIfFinished(trial.experiment_id);
+  }
+
+  /** An experiment is done when none of its trials are pending or running. */
+  markDoneIfFinished(experimentId: string) {
+    this.db.prepare(`UPDATE experiments SET status = 'done' WHERE id = ? AND NOT EXISTS
+                     (SELECT 1 FROM trials WHERE experiment_id = ? AND status IN ('pending','running'))`)
+      .run(experimentId, experimentId);
   }
 
   private maybeTripBreaker(experimentId: string, configId: string) {

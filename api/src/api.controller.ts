@@ -6,7 +6,7 @@ import type { Response } from 'express';
 import { HARNESSES, TOOLSETS, loadModelSpecs, loadModels, loadSkills, loadTasks } from './catalog';
 import { now } from './db';
 import { Runner } from './runner.service';
-import { compare, summarize, TrialRow } from './stats';
+import { compare, summarize, taskMatrix, TrialRow } from './stats';
 
 /** Build a config spec with a fixed key order, so the same settings always hash the same. */
 export function normalizeSpec(body: any) {
@@ -28,8 +28,8 @@ export function normalizeSpec(body: any) {
   const errors = [];
   if (!HARNESSES.includes(spec.harness)) errors.push(`harness must be one of ${HARNESSES}`);
   if (!m) errors.push(`unknown model ${spec.model}`);
-  else spec.model_spec = { provider_model: m.provider_model, base_url: m.base_url,
-                           api_key_env: m.api_key_env, price_per_mtok: m.price_per_mtok };
+  else spec.model_spec = { provider_model: m.provider_model, base_url: m.base_url, api_key_env: m.api_key_env,
+                           price_per_mtok: m.price_per_mtok, provider_routing: m.provider_routing ?? null };
   for (const s of spec.skills) if (!loadSkills().includes(s)) errors.push(`unknown skill ${s}`);
   for (const t of spec.tools) if (!TOOLSETS.includes(t)) errors.push(`unknown toolset ${t}`);
   if (spec.max_steps < 1 || spec.timeout_s < 1) errors.push('max_steps and timeout_s must be >= 1');
@@ -86,9 +86,7 @@ export class ApiController {
   createExperiment(@Body() body: any) {
     const configIds: string[] = body.config_ids ?? [];
     if (!configIds.length) throw new BadRequestException('config_ids required');
-    for (const c of configIds) {
-      if (!this.db.prepare(`SELECT 1 FROM configs WHERE id = ?`).get(c)) throw new BadRequestException(`unknown config ${c}`);
-    }
+    configIds.forEach((c) => this.requireConfig(c));
     const n = Number(body.trials_per_task ?? 3);
     if (!(n >= 1 && n <= 50)) throw new BadRequestException('trials_per_task must be 1..50');
     let tasks = loadTasks();
@@ -111,8 +109,7 @@ export class ApiController {
     const where = body?.config_id ? `AND config_id = ?` : '';
     const args = body?.config_id ? [id, body.config_id] : [id];
     const r = this.db.prepare(`UPDATE trials SET status = 'cancelled' WHERE experiment_id = ? AND status = 'pending' ${where}`).run(...args);
-    this.db.prepare(`UPDATE experiments SET status = 'done' WHERE id = ? AND NOT EXISTS
-                     (SELECT 1 FROM trials WHERE experiment_id = ? AND status IN ('pending','running'))`).run(id, id);
+    this.runner.markDoneIfFinished(id);
     return { cancelled: Number(r.changes) };
   }
 
@@ -123,21 +120,11 @@ export class ApiController {
   addConfig(@Param('id') id: string, @Body() body: any) {
     const e = this.getExperimentRow(id);
     const configId = String(body?.config_id ?? '');
-    if (!this.db.prepare(`SELECT 1 FROM configs WHERE id = ?`).get(configId)) throw new BadRequestException(`unknown config ${configId}`);
+    this.requireConfig(configId);
     const configIds: string[] = JSON.parse(e.config_ids);
     if (configIds.includes(configId)) throw new BadRequestException(`${configId} is already in this experiment`);
-    const tasks = JSON.parse(e.tasks);
-    const start = (this.db.prepare(`SELECT COUNT(*) AS n FROM trials WHERE experiment_id = ?`).get(id) as any).n;
-    const insert = this.db.prepare(
-      `INSERT INTO trials (id, experiment_id, config_id, task_id, trial_index, status) VALUES (?, ?, ?, ?, ?, 'pending')`);
-    const ids: string[] = [];
     this.db.exec('BEGIN');
-    for (let i = 0; i < e.trials_per_task; i++)
-      for (const task of tasks) {
-        const tid = `${id}-${start + ids.length}`;
-        insert.run(tid, id, configId, task.id, i);
-        ids.push(tid);
-      }
+    const ids = this.insertTrials(id, [configId], JSON.parse(e.tasks), e.trials_per_task);
     this.db.prepare(`UPDATE experiments SET config_ids = ?, status = 'running' WHERE id = ?`)
       .run(JSON.stringify([...configIds, configId]), id);
     this.db.exec('COMMIT');
@@ -147,23 +134,30 @@ export class ApiController {
 
   private startExperiment(name: string, configIds: string[], tasks: any[], n: number) {
     const id = randomUUID().slice(0, 8);
-    const ids: string[] = [];
-    const insert = this.db.prepare(
-      `INSERT INTO trials (id, experiment_id, config_id, task_id, trial_index, status) VALUES (?, ?, ?, ?, ?, 'pending')`);
     this.db.exec('BEGIN');
     this.db.prepare(`INSERT INTO experiments VALUES (?, ?, ?, ?, ?, 'running', ?)`)
       .run(id, name, JSON.stringify(configIds), JSON.stringify(tasks), n, now());
-    // Interleave configs and tasks so a partial run still covers every config fairly.
-    for (let i = 0; i < n; i++)
-      for (const task of tasks)
-        for (const c of configIds) {
-          const tid = `${id}-${ids.length}`;
-          insert.run(tid, id, c, task.id, i);
-          ids.push(tid);
-        }
+    const ids = this.insertTrials(id, configIds, tasks, n);
     this.db.exec('COMMIT');
     this.runner.enqueue(ids);
     return { id, trials: ids.length };
+  }
+
+  /** One pending trial per repeat × task × config. Interleaved (repeat 0 of every task and config first), so a
+   *  partial run still covers every config fairly. Trial ids are "<experiment>-<n>", continuing the numbering. */
+  private insertTrials(experimentId: string, configIds: string[], tasks: any[], n: number): string[] {
+    const insert = this.db.prepare(
+      `INSERT INTO trials (id, experiment_id, config_id, task_id, trial_index, status) VALUES (?, ?, ?, ?, ?, 'pending')`);
+    let next = (this.db.prepare(`SELECT COUNT(*) AS n FROM trials WHERE experiment_id = ?`).get(experimentId) as any).n;
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++)
+      for (const task of tasks)
+        for (const c of configIds) {
+          const tid = `${experimentId}-${next++}`;
+          insert.run(tid, experimentId, c, task.id, i);
+          ids.push(tid);
+        }
+    return ids;
   }
 
   @Get('experiments/:id')
@@ -171,40 +165,31 @@ export class ApiController {
     const e = this.getExperimentRow(id);
     const configIds: string[] = JSON.parse(e.config_ids);
     const trials = this.trialRows(id);
-    // matrix[task][config] = {passed, done, error, pending}
-    const matrix: Record<string, Record<string, Record<string, number>>> = {};
-    for (const t of trials) {
-      if (t.status === 'cancelled') continue;
-      const cell = ((matrix[t.task_id] ??= {})[t.config_id] ??=
-        { passed: 0, done: 0, error: 0, pending: 0, avg_latency_ms: 0, avg_cost_usd: 0, avg_llm_calls: 0, avg_turns: 0 });
-      if (t.status === 'done') {
-        cell.done++;
-        cell.passed += t.passed ? 1 : 0;
-        // running means over finished trials
-        cell.avg_latency_ms += ((t.latency_ms ?? 0) - cell.avg_latency_ms) / cell.done;
-        cell.avg_cost_usd += ((t.cost_usd ?? 0) - cell.avg_cost_usd) / cell.done;
-        cell.avg_llm_calls += ((t.llm_calls ?? 0) - cell.avg_llm_calls) / cell.done;
-        cell.avg_turns += ((t.turns ?? 0) - cell.avg_turns) / cell.done;
-      }
-      else if (t.status === 'error') cell.error++;
-      else cell.pending++;
-    }
-    const configs = configIds.map((c) => {
-      const row = this.db.prepare(`SELECT * FROM configs WHERE id = ?`).get(c) as any;
-      return { id: c, spec: JSON.parse(row.spec) };
-    });
+    const configs = configIds.map((c) => ({ id: c, spec: this.configSpec(c) }));
     return {
       id: e.id, name: e.name, status: e.status, created_at: e.created_at, trials_per_task: e.trials_per_task,
       configs, tasks: JSON.parse(e.tasks).map((t: any) => ({ id: t.id, category: t.category, grader: t.grader.type })),
       summaries: configIds.map((c) => summarize(trials, c)),
-      matrix,
+      matrix: taskMatrix(trials),
     };
   }
 
   @Get('experiments/:id/compare')
   compare(@Param('id') id: string, @Query('a') a: string, @Query('b') b: string) {
     this.getExperimentRow(id);
-    return compare(this.trialRows(id), a, b);
+    return { ...compare(this.trialRows(id), a, b), differences: this.configDifferences(a, b) };
+  }
+
+  /** Which settings differ between two configs. A fair comparison changes exactly one. */
+  private configDifferences(a: string, b: string) {
+    const sa = this.configSpec(a);
+    const sb = this.configSpec(b);
+    const fields = [...new Set([...Object.keys(sa), ...Object.keys(sb)])];
+    return fields
+      // model_spec follows from model; report it only when the same model name hides different details
+      .filter((f) => !(f === 'model_spec' && sa.model !== sb.model))
+      .filter((f) => JSON.stringify(sa[f]) !== JSON.stringify(sb[f]))
+      .map((f) => ({ field: f, a: sa[f] ?? null, b: sb[f] ?? null }));
   }
 
   @Get('experiments/:id/trials')
@@ -237,14 +222,22 @@ export class ApiController {
     const t = this.db.prepare(`SELECT * FROM trials WHERE id = ?`).get(id) as any;
     if (!t) throw new NotFoundException();
     const e = this.getExperimentRow(t.experiment_id);
-    const c = this.db.prepare(`SELECT * FROM configs WHERE id = ?`).get(t.config_id) as any;
     return {
       ...t,
       trace: t.trace && JSON.parse(t.trace),
       grader: t.grader && JSON.parse(t.grader),
       task: JSON.parse(e.tasks).find((x: any) => x.id === t.task_id),
-      config: JSON.parse(c.spec),
+      config: this.configSpec(t.config_id),
     };
+  }
+
+  private requireConfig(id: string) {
+    if (!this.db.prepare(`SELECT 1 FROM configs WHERE id = ?`).get(id)) throw new BadRequestException(`unknown config ${id}`);
+  }
+
+  private configSpec(id: string): any {
+    const row = this.db.prepare(`SELECT spec FROM configs WHERE id = ?`).get(id) as any;
+    return row ? JSON.parse(row.spec) : {};
   }
 
   private getExperimentRow(id: string): any {

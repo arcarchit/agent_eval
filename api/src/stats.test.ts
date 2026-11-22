@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bootstrapMeans, compare, mean, percentileCI, TrialRow } from './stats';
+import { bootstrapMeans, compare, mean, percentileCI, taskMatrix, TrialRow } from './stats';
 
 const row = (task: string, config: string, passed: boolean, status = 'done'): TrialRow => ({
   task_id: task, config_id: config, status, passed: passed ? 1 : 0,
@@ -47,5 +47,15 @@ describe('stats', () => {
     expect(r.tasks_compared).toBe(1);
     expect(r.tasks_dropped).toEqual(['t2']);
     expect(r.summary_b.trials_error).toBe(1);
+  });
+
+  it('task matrix: counts and per-trial averages over finished trials only', () => {
+    const rows: TrialRow[] = [
+      { ...row('t1', 'A', true), latency_ms: 100, llm_calls: 2, turns: 1 },
+      { ...row('t1', 'A', false), latency_ms: 300, llm_calls: 4, turns: 1 },
+      row('t1', 'A', false, 'error'),
+      row('t1', 'A', false, 'cancelled'),
+    ];
+    expect(taskMatrix(rows).t1.A).toMatchObject({ passed: 1, done: 2, error: 1, pending: 0, avg_latency_ms: 200, avg_llm_calls: 3, avg_turns: 1 });
   });
 });

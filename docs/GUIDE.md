@@ -127,6 +127,21 @@ Then:
 2. Test it: `cli.py --model my-model "Say hi"`.
 3. Create a config that uses it.
 
+**Fair model comparisons: pin who serves the model.** On OpenRouter one model is served by several companies,
+some with quantized (lower-precision) weights, and requests can move between them. Add the same
+`provider_routing` to both models (a YAML anchor guarantees it is identical):
+```yaml
+  llama-3.1-8b:
+    ...
+    provider_routing: &full_precision { quantizations: [bf16, fp16], require_parameters: true, allow_fallbacks: false }
+  ministral-8b:
+    ...
+    provider_routing: *full_precision
+```
+It is sent as OpenRouter's `provider` field by every harness and by the judge (one helper, `Model.request_params`).
+If OpenRouter answers "no endpoints found", loosen the rule for **both** models, never for one.
+The comparison panel lists which config settings differ and warns when more than one does.
+
 Notes:
 - The model must support **tool calling** for agent tasks. On OpenRouter, check that the model lists "tools".
 - Free models (`:free`) are rate-limited. Set `MAX_CONCURRENCY=1`.
@@ -145,7 +160,7 @@ from pathlib import Path
 
 import openai
 
-from common import Model, ProviderError, RetryableError, Trace
+from common import Model, Trace, call_model
 from harnesses.base import Harness, sessions
 
 
@@ -158,18 +173,12 @@ class DirectHarness(Harness):
         for i, message in enumerate(sessions(task)):      # 2. one session per memory_setup message + the prompt
             trace.add("session_start", index=i)
             trace.add("user", content=message)
-            try:                                          # 3. call the model; map provider errors
-                resp = client.chat.completions.create(
-                    model=model.provider_model, temperature=config.get("temperature", 0),
-                    max_tokens=config.get("max_tokens", 1024),
-                    messages=[{"role": "user", "content": message}])
-            except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
-                raise RetryableError(str(e)) from e       #    runner retries with backoff
-            except openai.APIStatusError as e:
-                raise ProviderError(f"HTTP {e.status_code}: {e.message}") from e   # trial ends as "error"
+            # 3. call the model. call_model sends the shared fields (temperature, provider routing) and turns
+            #    provider failures into RetryableError / ProviderError, so they are never graded.
+            resp = call_model(client, model, config.get("temperature", 0), max_tokens=config.get("max_tokens", 1024),
+                              messages=[{"role": "user", "content": message}])
             answer = resp.choices[0].message.content or ""
             trace.add("assistant", content=answer, tool_calls=[])   # 4. record what happened
-            trace.steps = 1
             if resp.usage:                                # 5. tokens -> cost
                 trace.input_tokens += resp.usage.prompt_tokens
                 trace.output_tokens += resp.usage.completion_tokens
@@ -187,9 +196,9 @@ class DirectHarness(Harness):
 |------|-----|
 | Use only `workspace` (agent files) and `home` (harness state). Both are fresh temp folders per trial. | Isolation: nothing leaks between trials. |
 | Run each `memory_setup` message as its own session, then the prompt in a **new** session (`sessions(task)`). Carry state across sessions only through memory, and only if `config["memory"]`. | Memory experiments stay meaningful. |
-| Raise `RetryableError` for rate limits and 5xx, and `ProviderError` for errors that will not go away (402, 401, unknown model). Never return them as an answer. | Infrastructure failures must not be graded as agent failures. |
+| Call models through `call_model()`, or, if the framework makes its own calls, pass it `model.request_params(...)` and raise `RetryableError` (rate limits, 5xx) / `ProviderError` (402, 401, unknown model) on failure. Never return an error as an answer. | Every harness sends the same temperature and provider routing (a fair comparison), and infrastructure failures are never graded as agent failures. |
 | Record events: `user`, `assistant`, `tool_call`, `tool_result` (`error=True` on failure), `memory_read`, `memory_write`, `skill_used`, `session_start`, `session_end`. | The trajectory view and the failure categories are built from them. |
-| Set `final_answer`, `input_tokens`, `output_tokens`, `steps`, `stop_reason` (`completed`, `step_limit`, `loop_guard`), and `available_tools`. | Grading, cost, and the `step_exhaustion` / `hallucinated_tool` categories. |
+| Set `final_answer`, `input_tokens`, `output_tokens`, `stop_reason` (`completed`, `step_limit`, `loop_guard`), and `available_tools`. | Grading, cost, and the `step_exhaustion` / `hallucinated_tool` categories. |
 | Respect `max_steps`, `max_tokens`, `temperature`, `tools`, `skills`. | Configs must mean the same thing for every harness. |
 | You will never see the grader: the task you receive has no `grader` key. | Keeps expected answers out of the agent's context. |
 

@@ -14,26 +14,19 @@ from harnesses.base import Harness, sessions
 
 SKILLS_DIR = ROOT / "skills"
 
+# Hermes' reason for ending a turn -> our stop_reason (anything else counts as "completed").
+STOP_REASONS = {"budget_exhausted": "step_limit",   # hit max_steps
+                "guardrail_halt": "loop_guard"}     # Hermes stopped a repeating tool loop
+
 
 class HermesHarness(Harness):
     name = "hermes"
 
     def run(self, task, config, model: Model, workspace: Path, home: Path) -> Trace:
-        hermes_home = home / "hermes"
-        for skill in config.get("skills", []):  # install only the skills this config enables
-            shutil.copytree(SKILLS_DIR / skill, hermes_home / "skills" / skill)
-        os.environ["HERMES_HOME"] = str(hermes_home)
-        os.environ["TERMINAL_CWD"] = str(workspace)
-        os.chdir(workspace)
-        # Hermes is installed in its own virtualenv (/opt/hermes/.venv, on PYTHONPATH in Docker), so an
-        # editor using another Python interpreter reports this import as unresolved. It works at runtime.
-        from run_agent import AIAgent  # pyright: ignore[reportMissingImports]  (import after HERMES_HOME is set)
-
-        toolsets = list(config.get("tools", []))
-        if config.get("memory"):
-            toolsets.append("memory")
-        if config.get("skills"):
-            toolsets.append("skills")
+        hermes_home = self._prepare_home(config, home, workspace)
+        # Hermes lives in its own virtualenv (on PYTHONPATH in Docker); an editor using another Python reports
+        # this import as unresolved. Imported here, after HERMES_HOME is set, because Hermes reads it at import.
+        from run_agent import AIAgent  # pyright: ignore[reportMissingImports]
 
         trace = Trace()
         for i, message in enumerate(sessions(task)):
@@ -45,32 +38,50 @@ class HermesHarness(Harness):
             agent = AIAgent(
                 base_url=model.base_url, api_key=model.api_key, model=model.provider_model,
                 max_iterations=config.get("max_steps", 10), max_tokens=config.get("max_tokens", 1024),
-                request_overrides={"temperature": config.get("temperature", 0.0)},
-                enabled_toolsets=toolsets, skip_memory=not config.get("memory"),
+                request_overrides=model.request_params(config.get("temperature", 0.0)),  # same fields as baseline
+                enabled_toolsets=self._toolsets(config), skip_memory=not config.get("memory"),
                 skip_context_files=True, quiet_mode=True, platform="batch", cwd=str(workspace))
-            trace.available_tools = sorted(agent.valid_tool_names) if hasattr(agent, "valid_tool_names") else []
+            trace.available_tools = sorted(getattr(agent, "valid_tool_names", []))
             result = agent.run_conversation(message)
+            self._raise_if_provider_failed(result, session=i)
 
-            # A failed turn means the model API call itself failed (rate limit, HTTP 402 out of
-            # credits, 5xx, auth). That is infrastructure, not agent behaviour: never grade it.
-            # Retryable ones go back to the runner for backoff; the rest end the trial as "error".
-            if result.get("failed"):
-                error = f"provider error in session {i}: {result.get('error') or result.get('failure_reason')}"
-                if result.get("failure_retryable"):
-                    raise RetryableError(error)
-                raise ProviderError(error)
             self._add_messages(trace, result.get("messages", []))
             trace.input_tokens += result.get("input_tokens") or 0
             trace.output_tokens += result.get("output_tokens") or 0
-            trace.steps = result.get("api_calls") or 0
             trace.final_answer = result.get("final_response") or ""
             exit_reason = result.get("turn_exit_reason") or ""
-            trace.stop_reason = {"budget_exhausted": "step_limit",   # hit max_steps
-                                 "guardrail_halt": "loop_guard",     # Hermes stopped a repeating tool loop
-                                 }.get(exit_reason, "completed")
+            trace.stop_reason = STOP_REASONS.get(exit_reason, "completed")
             # Recorded for every session, so a problem in an earlier (memory_setup) session stays visible.
             trace.add("session_end", index=i, stop_reason=trace.stop_reason, exit_reason=exit_reason)
         return trace
+
+    @staticmethod
+    def _prepare_home(config: dict, home: Path, workspace: Path) -> Path:
+        """Point Hermes at this trial's private folders, with only the skills this config enables."""
+        hermes_home = home / "hermes"
+        for skill in config.get("skills", []):
+            shutil.copytree(SKILLS_DIR / skill, hermes_home / "skills" / skill)
+        os.environ["HERMES_HOME"] = str(hermes_home)
+        os.environ["TERMINAL_CWD"] = str(workspace)
+        os.chdir(workspace)
+        return hermes_home
+
+    @staticmethod
+    def _toolsets(config: dict) -> list:
+        return (list(config.get("tools", []))
+                + (["memory"] if config.get("memory") else [])
+                + (["skills"] if config.get("skills") else []))
+
+    @staticmethod
+    def _raise_if_provider_failed(result: dict, session: int):
+        """A failed turn means the model API call itself failed (rate limit, 402 out of credits, 5xx, auth).
+        That is infrastructure, not agent behaviour, so it is never graded."""
+        if not result.get("failed"):
+            return
+        error = f"provider error in session {session}: {result.get('error') or result.get('failure_reason')}"
+        if result.get("failure_retryable"):
+            raise RetryableError(error)   # the runner retries with backoff
+        raise ProviderError(error)        # the trial ends as "error"
 
     @staticmethod
     def _add_messages(trace: Trace, messages: list):

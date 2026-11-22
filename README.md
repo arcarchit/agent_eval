@@ -53,8 +53,8 @@ judge_validation/   hand-labelled answers for checking the LLM judge
 ## Tests
 
 ```bash
-python -m pytest worker/tests        # 20 tests: graders, harnesses, isolation, provider errors, failure rules, judge
-cd api && npm test                   # 11 tests: statistics, config versioning, runner retry/timeout/crash/resume/cancel/breaker
+python -m pytest worker/tests        # 21 tests: graders, harnesses, isolation, provider errors, failure rules, judge
+cd api && npm test                   # 12 tests: statistics, config versioning, runner retry/timeout/crash/resume/cancel/breaker
 ```
 The tests use a fake model and a fake worker, so they need no API key.
 

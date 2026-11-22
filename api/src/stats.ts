@@ -137,3 +137,29 @@ export function compare(trials: TrialRow[], a: string, b: string) {
     summary_b: summarize(trials, b),
   };
 }
+
+/** One cell per (task, config): pass counts and per-trial averages over finished trials. Cancelled trials are left out. */
+export function taskMatrix(trials: TrialRow[]) {
+  const groups: Record<string, Record<string, TrialRow[]>> = {};
+  for (const t of trials) {
+    if (t.status === 'cancelled') continue;
+    ((groups[t.task_id] ??= {})[t.config_id] ??= []).push(t);
+  }
+  const matrix: Record<string, Record<string, Record<string, number>>> = {};
+  for (const [task, byConfig] of Object.entries(groups)) {
+    for (const [config, rows] of Object.entries(byConfig)) {
+      const done = rows.filter((t) => t.status === 'done');
+      (matrix[task] ??= {})[config] = {
+        passed: done.filter((t) => t.passed).length,
+        done: done.length,
+        error: rows.filter((t) => t.status === 'error').length,
+        pending: rows.filter((t) => t.status === 'pending' || t.status === 'running').length,
+        avg_latency_ms: mean(done.map((t) => t.latency_ms ?? 0)),
+        avg_cost_usd: mean(done.map((t) => t.cost_usd ?? 0)),
+        avg_llm_calls: mean(done.map((t) => t.llm_calls ?? 0)),
+        avg_turns: mean(done.map((t) => t.turns ?? 0)),
+      };
+    }
+  }
+  return matrix;
+}

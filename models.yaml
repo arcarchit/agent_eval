@@ -17,6 +17,38 @@ models:
     api_key_env: OPENROUTER_API_KEY
     price_per_mtok: { input: 0.13, output: 0.40 }
 
+  # ---- Matched pair for a fair model comparison: same size (8B), same context (128k), same era (2024),
+  # both with native tool calling. Both use the SAME provider routing (the &full_precision anchor):
+  #   quantizations      only providers serving full-precision weights (no int4/int8 copy for one model only)
+  #   require_parameters only providers that support every request field we send (e.g. tools)
+  #   allow_fallbacks    never silently switch to another provider mid-experiment
+  # If OpenRouter answers "no endpoints found", no provider matches: check the model's provider list on
+  # openrouter.ai and loosen the rule for BOTH models (for example add "fp8"), never for just one.
+  # IDs and prices were not verified from this environment: check them first.
+  llama-3.1-8b:
+    provider_model: meta-llama/llama-3.1-8b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.02, output: 0.05 }
+    provider_routing: &full_precision { quantizations: [bf16, fp16], require_parameters: true, allow_fallbacks: false }
+
+  ministral-8b:
+    provider_model: mistralai/ministral-8b
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.10, output: 0.10 }
+    provider_routing: *full_precision
+
+  # Judge candidate from a third family (neither Llama nor Mistral). To use it, set judge_model: qwen3.5-9b
+  # above, then run `python worker/judge_validation.py` and keep it only if kappa >= 0.8 with 0 unstable items.
+  # If it has a "thinking" mode, the extra text can break the judge's JSON: look for "unparseable output".
+  qwen3.5-9b:
+    provider_model: qwen/qwen3.5-9b                       # verify: this ID could not be checked from here
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.05, output: 0.15 }         # verify
+    provider_routing: *full_precision
+
   # ---- Free models on OpenRouter ($0, but rate-limited per day/minute; a rate-limited trial is retried,
   # then ends as "error"). Hermes needs tool calling: on openrouter.ai/models check the model lists "tools".
   # IDs below were NOT verified from this environment (openrouter.ai was unreachable): check them first.

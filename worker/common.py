@@ -1,9 +1,10 @@
-"""Small shared pieces: the model registry, the trace recorder and the retryable error."""
+"""Small shared pieces: the model registry, calling a model, the trace recorder, and the two error types."""
 import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import openai
 import yaml
 
 ROOT = Path(os.environ.get("EVALS_ROOT", Path(__file__).resolve().parent.parent))
@@ -27,9 +28,31 @@ class Model:
     api_key: str
     price_in: float   # USD per 1M input tokens
     price_out: float  # USD per 1M output tokens
+    routing: dict | None = None  # OpenRouter provider routing (models.yaml `provider_routing`), sent as "provider"
 
     def cost(self, input_tokens: int, output_tokens: int) -> float:
         return (input_tokens * self.price_in + output_tokens * self.price_out) / 1_000_000
+
+    def request_params(self, temperature: float) -> dict:
+        """Request fields that EVERY harness (and the judge) sends the same way, so two configs in a comparison
+        differ only in what the experiment varies. `routing` pins who serves the model on OpenRouter, e.g. only
+        full-precision providers, no silent fallback to a quantized one."""
+        params: dict = {"temperature": temperature}
+        if self.routing:
+            params["extra_body"] = {"provider": self.routing}
+        return params
+
+
+def call_model(client, model: Model, temperature: float, **kwargs):
+    """One chat-completions call with the fields every caller must send the same way, and provider errors
+    mapped to our two error types. Used by the baseline harness and the judge (Hermes makes its own calls,
+    but receives the same request_params)."""
+    try:
+        return client.chat.completions.create(model=model.provider_model, **model.request_params(temperature), **kwargs)
+    except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
+        raise RetryableError(str(e)) from e                                 # the runner retries with backoff
+    except openai.APIStatusError as e:                                      # 401 key, 402 credits, 404 model
+        raise ProviderError(f"HTTP {e.status_code}: {e.message}") from e   # the trial ends as "error"
 
 
 def load_models() -> dict:
@@ -47,6 +70,7 @@ def get_model(name: str, spec: dict | None = None) -> Model:
         api_key=os.environ.get(spec["api_key_env"], ""),
         price_in=spec["price_per_mtok"]["input"],
         price_out=spec["price_per_mtok"]["output"],
+        routing=spec.get("provider_routing"),
     )
 
 
@@ -60,7 +84,6 @@ class Trace:
     events: list = field(default_factory=list)
     final_answer: str = ""
     stop_reason: str = "completed"  # completed | step_limit | loop_guard | error
-    steps: int = 0                  # model calls in the scored session
     input_tokens: int = 0
     output_tokens: int = 0
     available_tools: list = field(default_factory=list)

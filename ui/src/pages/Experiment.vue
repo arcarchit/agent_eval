@@ -128,6 +128,14 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
         <label>B <select v-model="b" @change="load"><option v-for="c in exp.configs" :key="c.id">{{ c.id }}</option></select></label>
       </div>
       <div v-if="cmp" style="margin-top: 10px">
+        <p v-if="cmp.differences">
+          <strong>Configs differ in:</strong>
+          <span v-for="d in cmp.differences" :key="d.field" style="margin-right: 12px">
+            {{ d.field }} ({{ JSON.stringify(d.a) }} → {{ JSON.stringify(d.b) }})</span>
+          <span v-if="!cmp.differences.length" class="warn">nothing: these configs are identical</span>
+          <span v-if="cmp.differences.length > 1" class="warn"><br />More than one setting differs, so a difference
+            cannot be attributed to a single change.</span>
+        </p>
         <div class="verdict" :class="cmp.verdict === 'no significant difference' ? 'muted' : 'pass'">{{ cmp.verdict }}</div>
         <p>
           Mean difference A − B: <strong>{{ signedPct(cmp.mean_diff) }}</strong>,

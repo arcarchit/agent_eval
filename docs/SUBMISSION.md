@@ -20,8 +20,8 @@ the full document. A reviewer can read only this page and drill down where inter
 - **Run**: `docker compose up --build` (keys in `.env`), or `./scripts/run-local.sh` without Docker.
 - **README** covers setup. The step-by-step tutorials are in [GUIDE.md](GUIDE.md): [add a task](GUIDE.md#3-add-a-task),
   [add a model](GUIDE.md#4-add-a-model), [add a harness](GUIDE.md#5-add-a-harness) (with a complete, tested example adapter).
-- **Tests**: 20 Python (graders, harnesses, isolation, grader secrecy, provider errors, failure rules, judge voting) and
-  11 API (statistics, config versioning, runner retry/timeout/crash/resume/cancel/circuit breaker). They need no API key.
+- **Tests**: 21 Python (graders, harnesses, isolation, grader secrecy, provider errors, failure rules, judge voting, identical request fields across harnesses) and
+  12 API (statistics, config versioning, runner retry/timeout/crash/resume/cancel/circuit breaker). They need no API key.
 - **Task set**: 26 tasks with mixed graders: exact/regex 12, file-state 5, hidden unit tests 6, LLM judge 3 (these overlap the
   categories below).
   - Skill-dependent: 6 (made-up ACME rules no model can know).
@@ -104,7 +104,7 @@ where configs disagree); task sampling for quick checks; a result cache for iden
 | **Eval methodology** | Task-level paired bootstrap; calibration and power checked by simulation; errors excluded, not counted as failures; validated judge with an instability check; hidden graders |
 | **Abstraction** | `Harness` interface (2 adapters + a tested tutorial adapter); models as config; the core never changes |
 | **Observability** | Full trajectory with per-step timing, tool calls and results, memory reads/writes, skills used, session boundaries, grader reasoning, failure category; CLI with `--keep` |
-| **Engineering quality** | 31 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
+| **Engineering quality** | 33 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
 | **Judgment** | Scope cuts listed in [internal/DECISIONS.md](internal/DECISIONS.md); limits in FEATURES; first-run bugs found and documented honestly |
 
 ## Before submitting (checklist)

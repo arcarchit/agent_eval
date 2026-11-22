@@ -90,7 +90,9 @@ describe('runner + api', () => {
     const after = api.listTrials(exp.id);
     expect(after.filter((t) => t.config_id === 'fixed@v1' && t.status === 'done').length).toBe(4);
     for (const t of before) expect(after.find((x) => x.id === t.id)).toMatchObject({ status: t.status, passed: t.passed });
-    expect(api.compare(exp.id, 'good@v1', 'fixed@v1').tasks_compared).toBe(2);
+    const cmp = api.compare(exp.id, 'good@v1', 'fixed@v1');
+    expect(cmp.tasks_compared).toBe(2);
+    expect(cmp.differences).toEqual([{ field: 'temperature', a: 0, b: 0.5 }]);   // exactly one setting differs
     expect(() => api.addConfig(exp.id, { config_id: 'fixed@v1' })).toThrow();
   }, 20_000);
 

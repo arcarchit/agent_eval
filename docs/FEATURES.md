@@ -25,6 +25,15 @@ agent better, worse, or the same, and how sure are we?"*
   instability check.
 - **Graders never reach the agent:** harness adapters receive the task without its grader.
 
+### Fair comparisons
+- **One place builds the request** (`Model.request_params`): every harness and the judge send the same temperature and
+  provider routing, so two configs differ only in what the experiment varies.
+- **Provider pinning** per model (`provider_routing` in `models.yaml`): full-precision weights only, providers that support
+  every request field, no silent fallback. It is part of the config's model snapshot, so it is recorded with each result.
+- **"Configs differ in"** on every comparison, with a warning when more than one setting differs.
+- **Interleaved scheduling**: every config gets its repeat 0 of every task before any repeat 1, so the configs run at the same time.
+- **Matched model pair** in `models.yaml`: Llama 3.1 8B vs Ministral 8B (same size, context and era).
+
 ### Execution
 - **N repeated trials** per task and config, interleaved so that partial runs stay balanced.
 - **Isolation:** one OS process per trial, plus a fresh temp workspace and a harness home (memory, skills).
@@ -57,7 +66,7 @@ agent better, worse, or the same, and how sure are we?"*
 ### Interfaces and deployment
 - Web UI (Vue), REST API ([API.md](API.md)), CLI.
 - One command: `docker compose up`, or `./scripts/run-local.sh` without Docker. SQLite storage, no other services.
-- Tests: 20 Python tests (graders, harnesses, isolation, provider errors, failure rules, judge) and 11 API tests
+- Tests: 21 Python tests (graders, harnesses, isolation, provider errors, failure rules, judge) and 12 API tests
   (statistics, versioning, runner retry/timeout/crash/resume/cancel/breaker).
 
 ---
@@ -95,6 +104,8 @@ These are the places where results should not be trusted without care, or where 
 - **Single machine.** An in-process queue with SQLite; not distributed and not built for parallel API instances.
 - **Free models are rate-limited** per minute and per day. Retries happen at two layers (Hermes and the runner),
   which multiplies requests while rate-limited ([USAGE_AND_COST.md](USAGE_AND_COST.md#rate-limits)).
+- **Served-by is not recorded per trial.** Routing is pinned by rule, but which provider actually answered each call is not
+  stored. With `allow_fallbacks: false` and a single matching provider class, this is constrained but not proven.
 - **Static prices.** Cost uses the prices in `models.yaml`; provider caching and discounts are ignored.
 - **Adding a harness touches two lists:** the Python registry and `HARNESSES` in the API.
 - **No live progress inside a trial.** You see a trial's trajectory only after it finishes.

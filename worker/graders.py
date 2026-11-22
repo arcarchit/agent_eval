@@ -10,7 +10,7 @@ from pathlib import Path
 
 import openai
 
-from common import ProviderError, RetryableError, Trace, get_model, load_models
+from common import Trace, call_model, get_model, load_models
 
 
 def extract_answer(text: str) -> tuple[str, str]:
@@ -39,52 +39,57 @@ def normalize(s: str) -> str:
 
 
 def grade(task: dict, trace: Trace, workspace: Path) -> dict:
-    g = task["grader"]
-    answer = trace.final_answer
-    kind = g["type"]
+    g, answer = task["grader"], trace.final_answer
+    if g["type"] == "exact":
+        return _exact(g, answer)
+    if g["type"] == "regex":
+        return _regex(g, answer)
+    if g["type"] == "file_check":
+        return _file_check(g, workspace)
+    if g["type"] == "unit_test":
+        return _unit_test(g, workspace)
+    if g["type"] == "llm_judge":
+        return judge(task["prompt"], answer, g["rubric"])
+    raise ValueError(f"unknown grader {g['type']}")
 
-    if kind == "exact":
-        value, how = extract_answer(answer)
-        ok = normalize(value) == normalize(str(g["expected"]))
-        return _result(ok, f"expected {g['expected']!r}, got {value.strip()[:200]!r} ({how})")
 
-    if kind == "regex":
-        value, how = extract_answer(answer)
-        ok = re.search(g["pattern"], value.strip(), re.IGNORECASE | re.MULTILINE) is not None
-        return _result(ok, f"pattern {g['pattern']!r} {'matched' if ok else 'did not match'} {value.strip()[:200]!r} ({how})")
+def _exact(g: dict, answer: str) -> dict:
+    value, how = extract_answer(answer)
+    ok = normalize(value) == normalize(str(g["expected"]))
+    return _result(ok, f"expected {g['expected']!r}, got {value.strip()[:200]!r} ({how})")
 
-    if kind == "file_check":
-        path = workspace / g["path"]
-        if not path.exists():
-            return _result(False, f"{g['path']} was not created")
-        text = path.read_text()
+
+def _regex(g: dict, answer: str) -> dict:
+    value, how = extract_answer(answer)
+    ok = re.search(g["pattern"], value.strip(), re.IGNORECASE | re.MULTILINE) is not None
+    return _result(ok, f"pattern {g['pattern']!r} {'matched' if ok else 'did not match'} {value.strip()[:200]!r} ({how})")
+
+
+def _file_check(g: dict, workspace: Path) -> dict:
+    """Checks a file the agent left behind: json_equals, number, contains, or equals (one of them)."""
+    path = workspace / g["path"]
+    if not path.exists():
+        return _result(False, f"{g['path']} was not created")
+    text = path.read_text()
+    try:
         if "json_equals" in g:
-            try:
-                ok = json.loads(text) == g["json_equals"]
-            except json.JSONDecodeError:
-                return _result(False, f"{g['path']} is not valid JSON")
+            ok = json.loads(text) == g["json_equals"]
         elif "number" in g:
-            try:
-                ok = abs(float(text.strip()) - float(g["number"])) < 1e-6
-            except ValueError:
-                ok = False
+            ok = abs(float(text.strip()) - float(g["number"])) < 1e-6
         elif "contains" in g:
             ok = g["contains"].lower() in text.lower()
         else:
             ok = normalize(text) == normalize(str(g["equals"]))
-        return _result(ok, f"{g['path']} content: {text.strip()[:200]!r}")
+    except ValueError:  # not valid JSON / not a number (JSONDecodeError is a ValueError)
+        ok = False
+    return _result(ok, f"{g['path']} content: {text.strip()[:200]!r}")
 
-    if kind == "unit_test":
-        # The test file is written AFTER the agent finished, so the agent never sees it.
-        (workspace / "_eval_test.py").write_text(g["test_code"])
-        r = subprocess.run([sys.executable, "_eval_test.py"], cwd=workspace,
-                           capture_output=True, text=True, timeout=60)
-        return _result(r.returncode == 0, "all tests passed" if r.returncode == 0 else r.stderr[-1500:])
 
-    if kind == "llm_judge":
-        return judge(task["prompt"], answer, g["rubric"])
-
-    raise ValueError(f"unknown grader {kind}")
+def _unit_test(g: dict, workspace: Path) -> dict:
+    # The test file is written AFTER the agent finished, so the agent never sees it.
+    (workspace / "_eval_test.py").write_text(g["test_code"])
+    r = subprocess.run([sys.executable, "_eval_test.py"], cwd=workspace, capture_output=True, text=True, timeout=60)
+    return _result(r.returncode == 0, "all tests passed" if r.returncode == 0 else r.stderr[-1500:])
 
 
 JUDGE_PROMPT = """You are grading an AI agent's answer against a rubric.
@@ -112,14 +117,8 @@ def judge(task_prompt: str, answer: str, rubric: str, client=None, votes: int | 
     prompt = JUDGE_PROMPT.format(task=task_prompt, answer=answer, rubric=rubric)
     verdicts, reasons, cost = [], [], 0.0
     for _ in range(votes):
-        try:
-            resp = client.chat.completions.create(
-                model=model.provider_model, temperature=0, max_tokens=600,
-                response_format={"type": "json_object"}, messages=[{"role": "user", "content": prompt}])
-        except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
-            raise RetryableError(f"judge: {e}") from e
-        except openai.APIStatusError as e:
-            raise ProviderError(f"judge HTTP {e.status_code}: {e.message}") from e
+        resp = call_model(client, model, temperature=0, max_tokens=600, response_format={"type": "json_object"},
+                          messages=[{"role": "user", "content": prompt}])
         text = resp.choices[0].message.content or ""
         try:
             out = json.loads(text[text.find("{"): text.rfind("}") + 1])

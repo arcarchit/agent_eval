@@ -135,6 +135,9 @@ Query: `a`, `b` = config ids in this experiment.
 - `per_task[].label`: `A better`, `B better`, `same` or `noise`. `per_task` is sorted by `|delta|`.
 - `tasks_dropped`: tasks without finished trials on both sides; they are not paired.
 - `p_value`: two-sided bootstrap p-value, or `null` when no tasks could be paired.
+- `differences`: the config settings that differ between A and B, e.g. `[{"field": "model", "a": "llama-3.1-8b", "b": "ministral-8b"}]`.
+  A fair single-axis comparison has exactly one entry. `model_spec` is listed only if two configs share a model name
+  but its details (id, routing, price) differ.
 
 ## GET /experiments/:id/trials
 Query (optional): `task`, `config`.
@@ -178,7 +181,7 @@ The full record: everything from `/trials` plus `grader`, `trace`, `task` (from 
       { "type": "assistant", "ts": 1795260735.75, "content": "{\"answer\": \"214\"}", "tool_calls": [] },
       { "type": "session_end", "ts": 1795260735.75, "index": 0, "stop_reason": "completed" }
     ],
-    "final_answer": "{\"answer\": \"214\"}", "stop_reason": "completed", "steps": 1,
+    "final_answer": "{\"answer\": \"214\"}", "stop_reason": "completed",
     "input_tokens": 100, "output_tokens": 10, "available_tools": ["read_file", "write_file", "list_files"]
   },
   "task": { "id": "arith-01", "prompt": "...", "grader": { "type": "exact", "expected": "215" } },

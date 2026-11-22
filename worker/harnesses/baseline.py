@@ -9,7 +9,7 @@ from pathlib import Path
 
 import openai
 
-from common import ROOT, Model, ProviderError, RetryableError, Trace
+from common import ROOT, Model, Trace, call_model
 from harnesses.base import Harness, sessions
 
 SKILLS_DIR = ROOT / "skills"
@@ -97,7 +97,7 @@ class BaselineHarness(Harness):
 
         for i, message in enumerate(sessions(task)):
             trace.add("session_start", index=i)
-            trace.steps, trace.stop_reason = 0, "completed"
+            trace.stop_reason = "completed"
             trace.final_answer = self._session(client, model, config, system, message, tools, trace)
             trace.add("session_end", index=i, stop_reason=trace.stop_reason)
         return trace
@@ -109,15 +109,8 @@ class BaselineHarness(Harness):
         messages = [{"role": "system", "content": system}, {"role": "user", "content": message}]
         trace.add("user", content=message)
         for _ in range(config.get("max_steps", 10)):
-            try:
-                resp = client.chat.completions.create(
-                    model=model.provider_model, messages=messages, tools=tools.schemas or openai.NOT_GIVEN,
-                    temperature=config.get("temperature", 0.0), max_tokens=config.get("max_tokens", 1024))
-            except (openai.RateLimitError, openai.APIConnectionError, openai.InternalServerError) as e:
-                raise RetryableError(str(e)) from e
-            except openai.APIStatusError as e:  # 401 bad key, 402 out of credits, 404 unknown model
-                raise ProviderError(f"HTTP {e.status_code}: {e.message}") from e
-            trace.steps += 1
+            resp = call_model(client, model, config.get("temperature", 0.0), messages=messages,
+                              tools=tools.schemas or openai.NOT_GIVEN, max_tokens=config.get("max_tokens", 1024))
             if resp.usage:
                 trace.input_tokens += resp.usage.prompt_tokens
                 trace.output_tokens += resp.usage.completion_tokens

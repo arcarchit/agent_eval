@@ -374,3 +374,34 @@ I know the truth:
 - Why not McNemar? There is no natural pairing of trial *i* of A with trial *i* of B.
 - Why not a z-test on all trials? Treating correlated trials as independent makes the CI too narrow.
 - What does "no significant difference" mean? "Not detected at this power", not "equal".
+
+---
+
+## 13. Fair comparisons and the code clean-up
+
+**Q: Does any hard task depend on context length?**
+No. The largest task (hard-04) is about 330 tokens of prompt and files. Every call is dominated by Hermes' ~1.7k-token
+system prompt, and even an 11-call trial stays far below 32k. So a 32k vs 128k context window does not affect these
+results. Testing context on purpose would need a long-input task (e.g. a 40k-token log), which would deliberately
+favour the bigger window.
+
+**Q: What makes a model comparison fair here?**
+1. A matched pair: same size, context and era (Llama 3.1 8B vs Ministral 8B).
+2. The same request fields from every harness and the judge: `Model.request_params` sends temperature and provider routing.
+3. Provider pinning (`provider_routing`): full precision, only providers that support our fields, no fallback.
+   Without it, one model might run 4-bit on one provider and the other full-precision, or switch mid-run.
+4. Configs identical except the model. The comparison panel lists the differences and warns if there is more than one.
+5. Both configs in one experiment, interleaved, so they run at the same time.
+6. A judge from a third family, validated first.
+
+Not used: `seed`. Few providers support it, and with `require_parameters: true` it can exclude every provider.
+
+**Q: What was simplified in the code review?**
+- `call_model()` (common.py): the baseline and the judge used to repeat the same try/except mapping provider errors.
+  Now one function sends the shared fields and maps errors.
+- `grade()` is a short dispatch over `_exact`, `_regex`, `_file_check`, `_unit_test` and the judge.
+- The Hermes adapter's `run()` reads as a story: `_prepare_home`, `_toolsets`, `_raise_if_provider_failed`, plus a `STOP_REASONS` table.
+- `Trace.steps` was removed: it was redundant with `llm_calls()`.
+- API: `insertTrials()` is shared by "start experiment" and "add config"; `taskMatrix()` moved to stats.ts as plain
+  group-then-average (with a unit test); `markDoneIfFinished()` lives in one place in the runner; `configSpec()` and
+  `requireConfig()` helpers replace repeated queries.
