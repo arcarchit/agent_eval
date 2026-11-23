@@ -53,6 +53,8 @@ agent better, worse, or the same, and how sure are we?"*
 - **Paired A-vs-B comparison:** mean per-task difference, 95% CI, bootstrap p-value, and a verdict that says
   "no significant difference" when the CI includes 0.
 - **Per-task deltas** with their own CIs, sorted by size.
+- **Per-category comparison** (coding, reasoning, hard, skill, ...): pass rates, delta, CI, cost and latency per
+  category; categories under 5 tasks are flagged instead of given a winner.
 - **Cost, latency (mean, p90) and tokens** next to quality.
 - **Failure categories:** `timeout`, `provider_error`, `step_exhaustion`, `loop`, `truncated`, `hallucinated_tool`,
   `bad_tool_args`, `tool_errors`, `gave_up`, `wrong_answer`. Definitions in

@@ -72,7 +72,30 @@ Use this table to see **where** the aggregate difference comes from, not to make
 collapses to a single point and looks certain. With N=5 that certainty is not real: 5 out of 5 is
 compatible with a true pass rate as low as about 50%. Only the aggregate verdict in step 2 is a tested claim.
 
-### 4. Cost, latency and tokens
+### 4. Per-category comparison
+
+Every task has a `category` (coding, reasoning, hard, skill, files, writing, memory). The table "By task
+category" runs the same paired bootstrap as step 2, restricted to one category's tasks, and shows cost and
+latency per trial next to it. Categories come from the experiment's task snapshot.
+
+| Category | Tasks | A (Llama) | B (Ministral) | Δ | 95% CI | Reading | Cost / trial A · B |
+|----------|-------|-----------|---------------|---|--------|---------|--------------------|
+| coding | 4 | 10% | 75% | −65 | [−100, −25] | too few tasks | $0.00013 · $0.00020 |
+| files | 3 | 67% | 67% | 0 | – | same | $0.00014 · $0.00015 |
+| hard | 5 | 0% | 28% | −28 | [−52, −4] | B better | $0.00024 · $0.00094 |
+| memory | 2 | 0% | 0% | 0 | – | same | $0.00017 · $0.00028 |
+| reasoning | 5 | 60% | 44% | +16 | [0, +48] | noise | $0.00011 · $0.00012 |
+| skill | 5 | 32% | 8% | +24 | [0, +64] | noise | $0.00039 · $0.00020 |
+| writing | 2 | 20% | 10% | +10 | [0, +20] | too few tasks | $0.00012 · $0.00010 |
+
+Read it with two cautions:
+- **Small categories.** Below 5 tasks the row is labelled *too few tasks* and no winner is called: with 2
+  tasks there are only 3 possible resample means, so the CI means little. Even 5 tasks is the bare minimum.
+- **Many comparisons.** Seven categories, each tested at 95%, give roughly a 1-in-3 chance that at least one
+  shows a "winner" by luck. So "B better on hard tasks" is a lead, not a finding: here the trajectories
+  support it (Llama pastes code into its answer instead of writing files), and more hard tasks would confirm it.
+
+### 5. Cost, latency and tokens
 
 Shown next to quality for every config so trade-offs are visible: mean and total cost, mean and p90
 latency, mean tokens (input + output), mean LLM calls and user turns per trial. These are plain averages

@@ -99,6 +99,47 @@ export function summarize(trials: TrialRow[], configId: string) {
 
 export type Verdict = 'A better' | 'B better' | 'no significant difference';
 
+/** Below this many tasks a category's bootstrap CI is too coarse to trust (with 2 tasks there are only 3
+ *  possible resample means). The row is still shown, labelled "too few tasks". */
+export const MIN_TASKS_FOR_CI = 5;
+
+/**
+ * A vs B within each task category (coding, reasoning, ...): the same paired-by-task bootstrap as the
+ * overall comparison, restricted to that category's tasks. Plus mean cost and latency per trial, so the
+ * quality/cost trade-off is visible per category.
+ */
+export function compareByCategory(trials: TrialRow[], a: string, b: string, categoryOf: Record<string, string>) {
+  const byCat = new Map<string, TrialRow[]>();
+  for (const t of trials) {
+    const cat = categoryOf[t.task_id] ?? 'uncategorised';
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat)!.push(t);
+  }
+  const doneOf = (rows: TrialRow[], c: string) => rows.filter((t) => t.config_id === c && t.status === 'done');
+  return [...byCat.entries()]
+    .map(([category, rows]) => {
+      const ra = taskRates(rows, a);
+      const rb = taskRates(rows, b);
+      const tasks = [...ra.keys()].filter((t) => rb.has(t)).sort();
+      const diffs = tasks.map((t) => mean(ra.get(t)!) - mean(rb.get(t)!));
+      const ci = diffs.length ? percentileCI(bootstrapMeans(diffs)) : ([NaN, NaN] as [number, number]);
+      const enough = tasks.length >= MIN_TASKS_FOR_CI;
+      const label = !tasks.length ? 'no data'
+        : diffs.every((d) => d === 0) ? 'same'
+        : !enough ? 'too few tasks'
+        : ci[0] > 0 ? 'A better' : ci[1] < 0 ? 'B better' : 'noise';
+      const [da, db] = [doneOf(rows, a), doneOf(rows, b)];
+      return {
+        category, tasks: tasks.length,
+        a_rate: mean(tasks.map((t) => mean(ra.get(t)!))), b_rate: mean(tasks.map((t) => mean(rb.get(t)!))),
+        delta: mean(diffs), ci, label,
+        a_cost: mean(da.map((t) => t.cost_usd ?? 0)), b_cost: mean(db.map((t) => t.cost_usd ?? 0)),
+        a_latency_ms: mean(da.map((t) => t.latency_ms ?? 0)), b_latency_ms: mean(db.map((t) => t.latency_ms ?? 0)),
+      };
+    })
+    .sort((x, y) => x.category.localeCompare(y.category));
+}
+
 export function compare(trials: TrialRow[], a: string, b: string) {
   const ra = taskRates(trials, a);
   const rb = taskRates(trials, b);

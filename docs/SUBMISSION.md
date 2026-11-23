@@ -21,7 +21,7 @@ the full document. A reviewer can read only this page and drill down where inter
 - **README** covers setup. The step-by-step tutorials are in [GUIDE.md](GUIDE.md): [add a task](GUIDE.md#3-add-a-task),
   [add a model](GUIDE.md#4-add-a-model), [add a harness](GUIDE.md#5-add-a-harness) (with a complete, tested example adapter).
 - **Tests**: 23 Python (graders, harnesses, isolation, grader secrecy, provider errors, failure rules, truncation, judge voting, identical request fields across harnesses) and
-  12 API (statistics, config versioning, runner retry/timeout/crash/resume/cancel/circuit breaker). They need no API key.
+  13 API (statistics incl. per-category comparison, config versioning, runner retry/timeout/crash/resume/cancel/circuit breaker). They need no API key.
 - **Task set**: 26 tasks with mixed graders: exact/regex 12, file-state 5, hidden unit tests 6, LLM judge 3 (these overlap the
   categories below).
   - Skill-dependent: 6 (made-up ACME rules no model can know).
@@ -89,15 +89,133 @@ where configs disagree); task sampling for quick checks; a result cache for iden
 
 ## 6. Video script (≤ 10 min)
 
-| Time | Show | Say |
-|------|------|-----|
-| 0:00–0:45 | README, architecture diagram (DESIGN §1) | The problem; harness × model; one process per trial for isolation |
-| 0:45–2:00 | **Configs page**: create `hermes-skills` and `hermes-noskills`; show `@v1`, then change a setting to get `@v2` | Configs are immutable and versioned; the model snapshot means past results stay reproducible |
-| 2:00–3:00 | **Experiments page**: select both configs, N, tasks, click Run; progress updates | Interleaved trials; concurrency, retries, timeouts; provider errors are never graded; Stop / circuit breaker |
-| 3:00–5:30 | **Experiment page**: pass rate + CI, cost/latency/tokens/LLM calls, verdict, per-task deltas, failure categories | Paired bootstrap over tasks; "no significant difference" when the CI includes 0; where the difference comes from |
-| 5:30–8:00 | **Drill into a failed trial**: per-task cell → trial → trajectory with step timings, tool calls, skill_used / memory events, grader reasoning | Why it failed (e.g. skills off: the model guessed the ACME invoice format); compare with a passing trial from the other config |
-| 8:00–9:00 | `docs/JUDGE_VALIDATION.md` | The same answer got 3 passes / 4 fails; rubric fix + 5-vote majority + instability metric |
-| 9:00–10:00 | FEATURES known limitations + power table | What not to trust; why N=10; what I would build next (container per trial, bigger task set, early stopping) |
+A script to read aloud. *Italic lines* are what to show on screen; the rest is what to say. About 1,000
+spoken words, roughly 7½ minutes at a calm pace, leaving 2 minutes for clicking and pauses.
+
+**Before recording:**
+- Run `docker compose up -d --build`, so new trials show the system prompt and truncation warnings.
+- Don't edit `models.yaml` while recording: the single-file mount breaks the UI until a restart.
+- Open these tabs:
+  - experiment `33037e1d`;
+  - trials `33037e1d-4`, `33037e1d-5` and `33037e1d-41`;
+  - `docs/JUDGE_VALIDATION.md`;
+  - `docs/DESIGN.md` §6.
+- For the live run, pick 3–4 tasks without `judge-*` or `skill-05` (for example `arith-01`, `code-01`,
+  `skill-01`, `file-01`), N=2, model gpt-4o-mini.
+
+### 0:00 – 0:45 · The problem
+
+*Show: README, then the architecture diagram in DESIGN.md §1.*
+
+> An AI agent has two parts: a harness, meaning the loop, tools, skills and memory, and a model. Either can
+> change at any time. Every change raises the same question: did the agent get better, worse, or stay the
+> same, and how sure are we?
+>
+> This platform answers that with evidence. The UI is Vue, the API is NestJS, and every trial runs as its own
+> Python process, so trials can't leak state into each other. There are two harnesses: Hermes Agent and a
+> plain tool-calling baseline I wrote. Models are entries in one YAML file, reached through OpenRouter.
+
+### 0:45 – 2:00 · Define a config
+
+*Show: Configs page. Create a config: Hermes, gpt-4o-mini, file tools, the `acme-billing` skill. Save. Change
+the temperature, save again under the same name.*
+
+> A config is harness times model times settings: skills, memory, tools, temperature, and step and token
+> budgets. I'll create one with Hermes, gpt-4o-mini and the ACME billing skill.
+>
+> Configs are immutable. If I change a setting and save under the same name, I get version 2, and version 1 is
+> untouched. Each config also stores a snapshot of the model's settings, so a result from last week can
+> always be traced back to exactly what produced it.
+
+### 2:00 – 3:00 · Run it
+
+*Show: Experiments page. Select the new config and one other, the 3–4 tasks, N=2. Click Run. Let progress
+tick.*
+
+> Now I'll run it. Agents are random, so every task runs N times per config. Here I use 2 to keep the demo
+> short; real comparisons use 5 or 10.
+>
+> Each trial gets a fresh process, a fresh workspace and a fresh harness home. Memory only carries across
+> sessions inside one trial, and only if the config turns it on. Rate limits are retried with backoff. If the
+> provider fails, for example no credits, the trial is marked as an error and excluded. It is never counted as
+> a wrong answer. While this runs, let me show a finished experiment.
+
+### 3:00 – 5:30 · Compare results
+
+*Show: experiment `33037e1d`. Point at the summary table, then the verdict, then the per-task table. Hover a
+failure category.*
+
+> This experiment changes exactly one thing: the model. Same baseline harness, same tools and skills,
+> temperature zero. Llama 3.3 70B against Ministral 8B, on 26 tasks, 5 trials each: 260 trials, no errors.
+>
+> Llama passed 28.5 percent, Ministral 35.4. But look at the confidence intervals: they overlap a lot. The
+> paired difference is minus 6.9 points, with a 95 percent interval from minus 23 to plus 9. That interval
+> includes zero, so the verdict is "no significant difference". The smaller model scoring higher here is noise
+> at this sample size.
+>
+> How is that computed? The unit is the task, not the trial. Five trials of the same task are correlated, so
+> treating 130 trials as independent would make the intervals look far too certain. I average each task's
+> trials, take the per-task difference between the two models, and bootstrap over tasks.
+>
+> Quality isn't the only column. Cost, latency and tokens sit right next to it. Ministral costs about 60
+> percent more per trial, because it uses more tokens and has a higher input price.
+>
+> The per-task table shows where the difference comes from, and it's not one-sided. Ministral wins the coding
+> tasks; Llama wins the invoice-ID task and the arithmetic task. Hovering a failure category explains it.
+> Most failures here are "wrong answer", and that label hides something interesting. Let's open one.
+
+### 5:30 – 7:30 · Drill into a failed trial
+
+*Show: trial `33037e1d-4` (Llama, code-01). Scroll the trajectory. Then `33037e1d-5`. Then `33037e1d-41`.*
+
+> This is Llama failing a coding task: write a palindrome function into `solution.py`. Look at its reply. The
+> function is correct, but Llama wrote the tool call as plain text. It never actually called `write_file`, so no
+> file was created, and the hidden unit test fails with "no module named solution". It did this in all five
+> trials.
+>
+> Here's Ministral on the same task: a real tool call, the file is written, the tests pass. So Llama's
+> weakness here isn't coding. It describes the action instead of taking it.
+>
+> And Ministral's own failure, on the invoice task: it reads the ACME billing skill, and you can see the skill
+> being used right here. Then it builds the customer code with four letters instead of three. It read the
+> rule and applied it wrong.
+>
+> Every trial shows this level of detail: the system prompt, each model call with its timing, tool calls and
+> results, skills used, memory reads and writes, the grader's reasoning, and a failure category. You can see
+> why it passed or failed, not just that it did.
+
+*If the live run has finished: open one of its trials and point at the system-prompt event.*
+
+### 7:30 – 8:45 · Can we trust the judge?
+
+*Show: `docs/JUDGE_VALIDATION.md`, the results table.*
+
+> Three tasks are graded by an LLM judge, so I had to check the judge itself. I hand-labelled 19 answers and
+> measured agreement with Cohen's kappa, which corrects for agreement you'd get by chance. My bar was 0.8.
+>
+> No judge passed. The best, gpt-4o-mini, reached 0.68. And the way it failed matters: twice it said a banned
+> word was absent when it was right there, five votes out of five. Majority voting fixes random errors, not
+> consistent ones. The lesson: literal rules, like "this word must not appear", belong in a deterministic
+> check, not a judge. Until that's fixed, I report the experiment with and without the judge tasks. Here the
+> verdict is the same either way.
+
+### 8:45 – 10:00 · Limits and what's next
+
+*Show: the power table in DESIGN.md §6, then FEATURES.md known limitations.*
+
+> Where shouldn't you trust these conclusions? First, size. I chose N by simulating my own method on fake
+> experiments where the truth is known. With 26 tasks and 5 trials, a large effect is detected about 73
+> percent of the time, and small effects are often missed. So "no significant difference" means "not detected
+> at this power", not "equal".
+>
+> Second, the judge is below the bar, as we just saw. Third, providers weren't pinned, so tool-calling
+> behaviour can depend on which provider served the request. And the sandbox isolates state, but it isn't a
+> security boundary.
+>
+> Next I'd pin providers, add a failure category for tool calls written as text, move literal rules out of
+> the judge, and grow the task set, because past about ten trials, more tasks is what buys power.
+>
+> Thanks for watching.
 
 ## How the evaluation criteria are covered
 
@@ -106,7 +224,7 @@ where configs disagree); task sampling for quick checks; a result cache for iden
 | **Eval methodology** | Task-level paired bootstrap; calibration and power checked by simulation; errors excluded, not counted as failures; validated judge with an instability check; hidden graders |
 | **Abstraction** | `Harness` interface (2 adapters + a tested tutorial adapter); models as config; the core never changes |
 | **Observability** | Full trajectory with per-step timing, tool calls and results, memory reads/writes, skills used, session boundaries, grader reasoning, failure category; CLI with `--keep` |
-| **Engineering quality** | 35 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
+| **Engineering quality** | 36 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
 | **Judgment** | Scope cuts listed in [internal/DECISIONS.md](internal/DECISIONS.md); limits in FEATURES; first-run bugs found and documented honestly |
 
 ## Before submitting (checklist)

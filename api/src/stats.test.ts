@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bootstrapMeans, compare, mean, percentileCI, taskMatrix, TrialRow } from './stats';
+import { bootstrapMeans, compare, compareByCategory, mean, percentileCI, taskMatrix, TrialRow } from './stats';
 
 const row = (task: string, config: string, passed: boolean, status = 'done'): TrialRow => ({
   task_id: task, config_id: config, status, passed: passed ? 1 : 0,
@@ -57,5 +57,20 @@ describe('stats', () => {
       row('t1', 'A', false, 'cancelled'),
     ];
     expect(taskMatrix(rows).t1.A).toMatchObject({ passed: 1, done: 2, error: 1, pending: 0, avg_latency_ms: 200, avg_llm_calls: 3, avg_turns: 1 });
+  });
+
+  it('per-category comparison: winner only with enough tasks, "too few tasks" otherwise', () => {
+    // 6 coding tasks where A always passes and B never does; 2 math tasks where B wins; 2 identical text tasks.
+    const rows = [
+      ...make(6, 3, () => true, () => false),
+      ...['m0', 'm1'].flatMap((t) => [row(t, 'A', false), row(t, 'B', true)]),
+      ...['x0', 'x1'].flatMap((t) => [row(t, 'A', true), row(t, 'B', true)]),
+    ];
+    const cat: Record<string, string> = { m0: 'math', m1: 'math', x0: 'text', x1: 'text' };
+    for (let t = 0; t < 6; t++) cat[`t${t}`] = 'coding';
+    const by = Object.fromEntries(compareByCategory(rows, 'A', 'B', cat).map((c) => [c.category, c]));
+    expect(by.coding).toMatchObject({ tasks: 6, a_rate: 1, b_rate: 0, delta: 1, label: 'A better' });
+    expect(by.math).toMatchObject({ tasks: 2, delta: -1, label: 'too few tasks' });
+    expect(by.text).toMatchObject({ tasks: 2, delta: 0, label: 'same' });
   });
 });
