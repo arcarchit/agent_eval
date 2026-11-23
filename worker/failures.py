@@ -18,6 +18,8 @@ def classify(trace: Trace, passed: bool, timed_out: bool = False) -> str | None:
         return "step_exhaustion"          # ran out of steps, often a loop
     if trace.stop_reason == "loop_guard":
         return "loop"                     # the harness itself stopped a repeating tool loop
+    if trace.stop_reason == "truncated":
+        return "truncated"                # reply hit max_tokens: a config limit, not (only) the model
     calls = [e for e in trace.events if e["type"] == "tool_call"]
     results = [e for e in trace.events if e["type"] == "tool_result"]
     if any(trace.available_tools and c["name"] not in trace.available_tools for c in calls):

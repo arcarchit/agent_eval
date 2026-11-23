@@ -18,7 +18,7 @@ MODEL = Model("fake", "fake/model", "http://x", "k", 1.0, 2.0)
 
 
 # ---------- fake OpenAI client ----------
-def reply(content=None, tool_calls=None):
+def reply(content=None, tool_calls=None, finish_reason="stop"):
     msg = {"role": "assistant", "content": content}
     if tool_calls:
         msg["tool_calls"] = [{"id": f"c{i}", "type": "function",
@@ -26,7 +26,7 @@ def reply(content=None, tool_calls=None):
                              for i, (n, a) in enumerate(tool_calls)]
     return ChatCompletion.model_validate({
         "id": "x", "object": "chat.completion", "created": 0, "model": "fake",
-        "choices": [{"index": 0, "message": msg, "finish_reason": "stop"}],
+        "choices": [{"index": 0, "message": msg, "finish_reason": finish_reason}],
         "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}})
 
 
@@ -236,6 +236,24 @@ def test_hermes_loop_guard_and_session_end(tmp_path, monkeypatch):
     trace = h.run({"prompt": "p"}, {}, MODEL, ws, home)
     assert trace.stop_reason == "loop_guard" and classify(trace, False) == "loop"
     assert trace.events[-1] == {**trace.events[-1], "type": "session_end", "exit_reason": "guardrail_halt"}
+
+
+def test_baseline_truncation_is_recorded_and_not_acted_on(tmp_path):
+    ws, home = dirs(tmp_path)
+    cut = reply(tool_calls=[("read_file", {"path": "a.txt"})], finish_reason="length")
+    trace = FakeBaseline([cut]).run({"prompt": "p"}, {"tools": ["file"], "max_tokens": 50}, MODEL, ws, home)
+    assert trace.stop_reason == "truncated" and classify(trace, False) == "truncated"
+    assert not any(e["type"] == "tool_call" for e in trace.events)        # the half-written call was not run
+    assert any(e["type"] == "warning" and "max_tokens (50)" in e["content"] for e in trace.events)
+
+
+def test_hermes_truncation_is_recorded(tmp_path, monkeypatch):
+    ws, home = dirs(tmp_path)
+    h = fake_hermes(monkeypatch, {"messages": [], "final_response": "The model's reply was cut off", "failed": False,
+                                  "failure_reason": "truncated", "failure_retryable": True})
+    trace = h.run({"prompt": "p"}, {}, MODEL, ws, home)
+    assert trace.stop_reason == "truncated" and classify(trace, False) == "truncated"
+    assert any(e["type"] == "warning" and e["name"] == "truncated" for e in trace.events)
 
 
 def test_hermes_tool_error_detection():

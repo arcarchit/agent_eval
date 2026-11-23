@@ -15,8 +15,17 @@ from harnesses.base import Harness, sessions
 SKILLS_DIR = ROOT / "skills"
 
 # Hermes' reason for ending a turn -> our stop_reason (anything else counts as "completed").
-STOP_REASONS = {"budget_exhausted": "step_limit",   # hit max_steps
-                "guardrail_halt": "loop_guard"}     # Hermes stopped a repeating tool loop
+# Matched by prefix: Hermes appends details, e.g. "max_iterations_reached(10/10)".
+STOP_REASONS = {"max_iterations_reached": "step_limit",  # hit max_steps
+                "budget_exhausted": "step_limit",        # older Hermes name for the same thing
+                "guardrail_halt": "loop_guard"}          # Hermes stopped a repeating tool loop
+# Hermes answers a reply cut off by max_tokens by asking the model to continue (a few times), so the turn
+# can still succeed. The nudge is a user message starting with this text; we surface it as a warning.
+LENGTH_NUDGE = "[System: Your previous response was truncated by the output length limit"
+
+
+def stop_reason_for(exit_reason: str) -> str:
+    return next((v for k, v in STOP_REASONS.items() if exit_reason.startswith(k)), "completed")
 
 
 class HermesHarness(Harness):
@@ -54,7 +63,13 @@ class HermesHarness(Harness):
             trace.output_tokens += result.get("output_tokens") or 0
             trace.final_answer = result.get("final_response") or ""
             exit_reason = result.get("turn_exit_reason") or ""
-            trace.stop_reason = STOP_REASONS.get(exit_reason, "completed")
+            trace.stop_reason = stop_reason_for(exit_reason)
+            # A turn can end early without failing (failed=False); Hermes then stamps failure_reason, e.g.
+            # "truncated" = reply hit max_tokens. final_response is then Hermes' explanation, not the model's.
+            if result.get("failure_reason"):
+                trace.add("warning", name=result["failure_reason"], content=result.get("final_response") or "")
+                if result["failure_reason"] == "truncated":
+                    trace.stop_reason = "truncated"
             # Recorded for every session, so a problem in an earlier (memory_setup) session stays visible.
             trace.add("session_end", index=i, stop_reason=trace.stop_reason, exit_reason=exit_reason)
         return trace
@@ -93,7 +108,10 @@ class HermesHarness(Harness):
         "timestamp", which we keep, so per-step durations in the UI are real."""
         for m in messages:
             ts = m.get("timestamp")
-            if m["role"] == "user":
+            if m["role"] == "user" and str(m.get("content") or "").startswith(LENGTH_NUDGE):
+                trace.add("warning", ts=ts, name="truncated_continued",
+                          content="Reply hit max_tokens; Hermes asked the model to continue.")
+            elif m["role"] == "user":
                 trace.add("user", ts=ts, content=m.get("content"))
             elif m["role"] == "assistant":
                 calls = [c["function"] for c in m.get("tool_calls") or []]

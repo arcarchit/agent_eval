@@ -115,10 +115,16 @@ class BaselineHarness(Harness):
             if resp.usage:
                 trace.input_tokens += resp.usage.prompt_tokens
                 trace.output_tokens += resp.usage.completion_tokens
-            msg = resp.choices[0].message
+            msg, finish = resp.choices[0].message, resp.choices[0].finish_reason
             calls = msg.tool_calls or []
-            trace.add("assistant", content=msg.content or "",
+            trace.add("assistant", content=msg.content or "", finish_reason=finish,
                       tool_calls=[{"name": c.function.name, "arguments": c.function.arguments} for c in calls])
+            if finish == "length":
+                # Same rule as Hermes: a cut-off reply may hold a half-written tool call, so don't run it.
+                trace.add("warning", content=f"Reply cut off: hit max_tokens ({config.get('max_tokens', 1024)}). "
+                                             "Incomplete reply not acted on; session ended.")
+                trace.stop_reason = "truncated"
+                return msg.content or ""
             messages.append(msg.model_dump(exclude_none=True))
             if not calls:
                 return msg.content or ""

@@ -79,11 +79,11 @@ class Trace:
     """Everything that happened in one trial. Harness adapters fill this in.
 
     Event types: session_start, system (the system prompt sent), user, assistant, tool_call, tool_result,
-    memory_read, memory_write, skill_used, session_end.
+    memory_read, memory_write, skill_used, warning (turn ended early, e.g. reply hit max_tokens), session_end.
     """
     events: list = field(default_factory=list)
     final_answer: str = ""
-    stop_reason: str = "completed"  # completed | step_limit | loop_guard | error
+    stop_reason: str = "completed"  # completed | step_limit | loop_guard | truncated (hit max_tokens) | error
     input_tokens: int = 0
     output_tokens: int = 0
     available_tools: list = field(default_factory=list)

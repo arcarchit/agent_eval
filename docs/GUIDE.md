@@ -198,7 +198,7 @@ class DirectHarness(Harness):
 | Run each `memory_setup` message as its own session, then the prompt in a **new** session (`sessions(task)`). Carry state across sessions only through memory, and only if `config["memory"]`. | Memory experiments stay meaningful. |
 | Call models through `call_model()`, or, if the framework makes its own calls, pass it `model.request_params(...)` and raise `RetryableError` (rate limits, 5xx) / `ProviderError` (402, 401, unknown model) on failure. Never return an error as an answer. | Every harness sends the same temperature and provider routing (a fair comparison), and infrastructure failures are never graded as agent failures. |
 | Record events: `user`, `assistant`, `tool_call`, `tool_result` (`error=True` on failure), `memory_read`, `memory_write`, `skill_used`, `session_start`, `session_end`. | The trajectory view and the failure categories are built from them. |
-| Set `final_answer`, `input_tokens`, `output_tokens`, `stop_reason` (`completed`, `step_limit`, `loop_guard`), and `available_tools`. | Grading, cost, and the `step_exhaustion` / `hallucinated_tool` categories. |
+| Set `final_answer`, `input_tokens`, `output_tokens`, `stop_reason` (`completed`, `step_limit`, `loop_guard`, `truncated`), and `available_tools`. | Grading, cost, and the `step_exhaustion` / `hallucinated_tool` categories. |
 | Respect `max_steps`, `max_tokens`, `temperature`, `tools`, `skills`. | Configs must mean the same thing for every harness. |
 | You will never see the grader: the task you receive has no `grader` key. | Keeps expected answers out of the agent's context. |
 
