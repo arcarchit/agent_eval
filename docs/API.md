@@ -127,12 +127,18 @@ Query: `a`, `b` = config ids in this experiment.
   "verdict": "A better",
   "per_task": [{ "task_id": "skill-01", "a_rate": 1, "b_rate": 0, "n_a": 5, "n_b": 5,
                  "delta": 1, "ci": [1, 1], "label": "A better" }],
+  "per_category": [{ "category": "skill", "tasks": 5, "a_rate": 0.8, "b_rate": 0.1, "delta": 0.7,
+                     "ci": [0.4, 0.9], "label": "A better", "a_cost": 0.0009, "b_cost": 0.0007,
+                     "a_latency_ms": 5200, "b_latency_ms": 3900 }],
   "summary_a": { "...": "same shape as summaries[]" }, "summary_b": { "...": "..." }
 }
 ```
 - `verdict`: `A better` / `B better` when the 95% CI of the mean per-task difference excludes 0; otherwise
   `no significant difference`.
 - `per_task[].label`: `A better`, `B better`, `same` or `noise`. `per_task` is sorted by `|delta|`.
+- `per_category`: the same paired bootstrap within each task category (from the task snapshot), with mean cost
+  and latency per trial. `label` is `A better`, `B better`, `noise`, `same`, or `too few tasks` (fewer than 5
+  tasks: no winner is called). Sorted by category name.
 - `tasks_dropped`: tasks without finished trials on both sides; they are not paired.
 - `p_value`: two-sided bootstrap p-value, or `null` when no tasks could be paired.
 - `differences`: the config settings that differ between A and B, e.g. `[{"field": "model", "a": "llama-3.1-8b", "b": "ministral-8b"}]`.

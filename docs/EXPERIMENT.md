@@ -66,6 +66,21 @@ A − B = −9.6 points, 95% CI [−27.8, +8.7], p ≈ 0.31 → **no significant
 The per-task CIs of 0/5-vs-5/5 rows collapse to a single point and overstate certainty (see STATISTICS.md); read
 this table as "where the difference comes from", not as per-task proof.
 
+**By task category** (same paired bootstrap within each category; categories under 5 tasks get no winner):
+
+| Category | Tasks | A (Llama) | B (Ministral) | Δ | 95% CI | Reading | Cost / trial A · B |
+|----------|-------|-----------|---------------|---|--------|---------|--------------------|
+| coding | 4 | 10% | 75% | −65 | [−100, −25] | too few tasks | $0.00013 · $0.00020 |
+| hard | 5 | 0% | 28% | −28 | [−52, −4] | B better | $0.00024 · $0.00094 |
+| reasoning | 5 | 60% | 44% | +16 | [0, +48] | noise | $0.00011 · $0.00012 |
+| skill | 5 | 32% | 8% | +24 | [0, +64] | noise | $0.00039 · $0.00020 |
+| files / memory / writing | 3 / 2 / 2 | 67% / 0% / 20% | 67% / 0% / 10% | 0 / 0 / +10 | – | same / same / too few | – |
+
+The overall "no difference" hides a split: Ministral leads on coding and hard tasks, where Llama tends not to
+use its tools (Ministral costs about 4× more per hard trial, most likely because it actually runs the multi-step tool work); Llama
+leans ahead on reasoning and skill tasks. With 7 categories tested, one false "winner" is plausible by chance,
+so the hard-task result is a lead that the trajectories below support, not a finding on its own.
+
 **Failure categories:** A: `wrong_answer` 88, `step_exhaustion` 5. B: `wrong_answer` 81, `step_exhaustion` 2,
 `hallucinated_tool` 1. Both fail mostly with `wrong_answer`, which hides the real cause for A (next section).
 

@@ -6,7 +6,7 @@ import type { Response } from 'express';
 import { HARNESSES, TOOLSETS, loadModelSpecs, loadModels, loadSkills, loadTasks } from './catalog';
 import { now } from './db';
 import { Runner } from './runner.service';
-import { compare, summarize, taskMatrix, TrialRow } from './stats';
+import { compare, compareByCategory, summarize, taskMatrix, TrialRow } from './stats';
 
 /** Build a config spec with a fixed key order, so the same settings always hash the same. */
 export function normalizeSpec(body: any) {
@@ -176,8 +176,15 @@ export class ApiController {
 
   @Get('experiments/:id/compare')
   compare(@Param('id') id: string, @Query('a') a: string, @Query('b') b: string) {
-    this.getExperimentRow(id);
-    return { ...compare(this.trialRows(id), a, b), differences: this.configDifferences(a, b) };
+    const e = this.getExperimentRow(id);
+    const trials = this.trialRows(id);
+    // Categories come from the experiment's task snapshot, so editing a task file later does not regroup old results.
+    const categoryOf = Object.fromEntries(JSON.parse(e.tasks).map((t: any) => [t.id, t.category ?? 'uncategorised']));
+    return {
+      ...compare(trials, a, b),
+      per_category: compareByCategory(trials, a, b, categoryOf),
+      differences: this.configDifferences(a, b),
+    };
   }
 
   /** Which settings differ between two configs. A fair comparison changes exactly one. */

@@ -73,6 +73,9 @@ const progress = computed(() => {
   return `${done} / ${all} trials finished`;
 });
 
+const categoryOf = computed<Record<string, string>>(() =>
+  Object.fromEntries((exp.value?.tasks ?? []).map((t: any) => [t.id, t.category])));
+
 const num = (x: number) => (Number.isFinite(x) ? x.toFixed(1) : '–');
 const ci = (c: number[]) => `[${pct(c[0])}, ${pct(c[1])}]`;
 const signedPct = (x: number) => (x > 0 ? '+' : '') + pct(x);
@@ -143,10 +146,30 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
           <span v-if="cmp.verdict === 'no significant difference'">The CI contains 0, so this difference may be noise.</span>
           <span v-if="cmp.tasks_dropped.length" class="warn">Dropped (no finished trials on one side): {{ cmp.tasks_dropped.join(', ') }}</span>
         </p>
+        <h4>By task category</h4>
+        <table v-if="cmp.per_category">
+          <tr><th>Category</th><th class="num">Tasks</th><th class="num">A</th><th class="num">B</th><th class="num">Δ</th>
+            <th>95% CI of Δ</th><th>Reading</th><th class="num">Cost / trial A · B</th><th class="num">Latency A · B</th></tr>
+          <tr v-for="c in cmp.per_category" :key="c.category">
+            <td><strong>{{ c.category }}</strong></td><td class="num">{{ c.tasks }}</td>
+            <td class="num">{{ pct(c.a_rate) }}</td><td class="num">{{ pct(c.b_rate) }}</td>
+            <td class="num">{{ signedPct(c.delta) }}</td>
+            <td :class="{ muted: c.label === 'too few tasks' }">{{ ci(c.ci) }}</td>
+            <td :class="c.label === 'A better' || c.label === 'B better' ? 'pass' : 'muted'">{{ c.label }}</td>
+            <td class="num">{{ usd(c.a_cost) }} · {{ usd(c.b_cost) }}</td>
+            <td class="num">{{ secs(c.a_latency_ms) }} · {{ secs(c.b_latency_ms) }}</td>
+          </tr>
+        </table>
+        <p class="muted">Same paired bootstrap as above, within each category. A category with fewer than 5 tasks
+          is labelled "too few tasks": its CI is too coarse to call a winner, so read its Δ as a direction only.
+          With several categories, each tested at 95%, one false "better" is expected now and then: treat a
+          category winner as a lead to check in the trajectories, and confirm it with more tasks.</p>
+
+        <h4>By task</h4>
         <table>
-          <tr><th>Task</th><th class="num">A</th><th class="num">B</th><th class="num">Δ</th><th>95% CI of Δ</th><th>Reading</th></tr>
+          <tr><th>Task</th><th>Category</th><th class="num">A</th><th class="num">B</th><th class="num">Δ</th><th>95% CI of Δ</th><th>Reading</th></tr>
           <tr v-for="t in cmp.per_task" :key="t.task_id">
-            <td>{{ t.task_id }}</td>
+            <td>{{ t.task_id }}</td><td class="muted">{{ categoryOf[t.task_id] ?? '' }}</td>
             <td class="num">{{ pct(t.a_rate) }} <span class="muted">n={{ t.n_a }}</span></td>
             <td class="num">{{ pct(t.b_rate) }} <span class="muted">n={{ t.n_b }}</span></td>
             <td class="num">{{ signedPct(t.delta) }}</td><td>{{ ci(t.ci) }}</td>
