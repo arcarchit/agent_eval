@@ -1,0 +1,39 @@
+{
+  "n": 19,
+  "accuracy": 0.7894736842105263,
+  "cohens_kappa": 0.5365853658536586,
+  "false_pass": 0,
+  "false_fail": 4,
+  "unstable_items": 0,
+  "disagreements": [
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nQuick update: a bank holiday moves your refund by 3 business days. You will see it in your account after that, and we will confirm by email.\n\n\u2014 The ACME Team",
+      "human_label": "pass",
+      "note": "different wording, all rules",
+      "judge_reasoning": "judge returned unparseable output: Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Grade an AI agent's answer against a provided rubric.\n    *   Input: Task description, Agent's final answer, Rubric.\n    *   Output Format: JSON only (`{\"reasoning\": \"<check each rubric point>\", \"verdict\": \"pass\" or \"fail\"}`).\n    *   Con"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "- On 2025-05-02, checkout failed for about 30% of users for ~45 minutes (14:05-14:50 UTC).\n- Root cause: a config deploy cut the payment service DB connection pool from 50 to 5, so it ran out under normal traffic and requests timed out.\n- Fix: the config was rolled back at 14:47, and a CI check now blocks pool sizes below 20.",
+      "human_label": "pass",
+      "note": "complete and accurate",
+      "judge_reasoning": "judge returned unparseable output: Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Grade an AI agent's answer against a provided rubric.\n    *   Input: Task description, Agent's answer, Rubric.\n    *   Output Format: JSON only (`{\"reasoning\": \"<check each rubric point>\", \"verdict\": \"pass\" or \"fail\"}`).\n    *   Constrain"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "* What happened: ~30% of checkout requests failed from 14:05 to 14:50 UTC on 2 May 2025.\n* Root cause: a 14:03 config deploy reduced the payment DB connection pool from 50 to 5, which was exhausted under normal load.\n* Fix: rollback at 14:47; new CI check rejects pool sizes below 20.",
+      "human_label": "pass",
+      "note": "different bullet style, complete",
+      "judge_reasoning": "judge returned unparseable output: Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Grade an AI agent's answer against a provided rubric.\n    *   Input: Task description, Agent's answer, Rubric.\n    *   Constraint: Reply with JSON only: `{\"reasoning\": \"<check each rubric point>\", \"verdict\": \"pass\" or \"fail\"}`.\n    *   Co"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Sunlight is made of many colours and the air scatters the blue part the most, so blue light spreads across the whole sky. That is why we see blue above us.",
+      "human_label": "pass",
+      "note": "correct, 2 sentences",
+      "judge_reasoning": "judge returned unparseable output: Thinking Process:\n\n1.  **Analyze the Request:**\n    *   Task: Grade an AI agent's answer against a provided rubric.\n    *   Input: Task description, Agent's answer, Rubric.\n    *   Output Format: JSON only (`{\"reasoning\": \"<check each rubric point>\", \"verdict\": \"pass\" or \"fail\"}`).\n    *   Constrain"
+    }
+  ],
+  "unstable": []
+}

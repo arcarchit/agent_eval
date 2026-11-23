@@ -1,0 +1,15 @@
+id: code-02
+category: coding
+prompt: "Create solution.py with a function parse_duration(s: str) -> int that converts strings like '1h30m', '45s', '2h', '1h2m3s' into a total number of seconds."
+grader:
+  type: unit_test
+  test_code: |
+    from solution import parse_duration
+    assert parse_duration("1h30m") == 5400
+    assert parse_duration("45s") == 45
+    assert parse_duration("2h") == 7200
+    assert parse_duration("1h2m3s") == 3723
+    assert parse_duration("10m") == 600
+    assert parse_duration("0h0m7s") == 7
+    assert parse_duration("27m") == 1620
+    assert parse_duration("3h59s") == 10859

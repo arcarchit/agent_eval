@@ -1,0 +1,36 @@
+id: hard-03
+category: hard
+difficulty: hard
+prompt: |-
+  Create cache.py with a class TTLCache(capacity: int, ttl: float) with methods put(key, value, now: float) and
+  get(key, now: float). `now` is the current time in seconds, passed in by the caller (do not read the clock).
+  Rules:
+  - An entry written at time t expires at t + ttl: get at now >= t + ttl returns None and removes it.
+  - get of a live key returns its value and marks it most recently used.
+  - put of an existing key updates the value, resets its expiry, and marks it most recently used.
+  - When put adds a NEW key and the cache is full, first remove all expired entries; if it is still full,
+    evict the least recently used entry.
+  - len(cache) returns the number of entries stored right now (including expired ones not yet removed).
+grader:
+  type: unit_test
+  test_code: |
+    from cache import TTLCache
+    c = TTLCache(2, ttl=10)
+    c.put("a", 1, now=0); c.put("b", 2, now=1)
+    assert c.get("a", now=2) == 1            # a is now most recent
+    c.put("c", 3, now=3)                     # evicts LRU = b
+    assert c.get("b", now=3) is None and c.get("a", now=3) == 1 and c.get("c", now=3) == 3
+    assert c.get("a", now=10) is None        # written at 0, expires at exactly 10
+    assert len(c) == 1                       # a was removed on that get
+    c = TTLCache(2, ttl=5)
+    c.put("x", 1, now=0); c.put("y", 2, now=4)
+    c.get("x", now=4)                        # x most recent, but expires at 5
+    c.put("z", 3, now=6)                     # full: drop expired x first, so y survives
+    assert c.get("y", now=6) == 2 and c.get("z", now=6) == 3 and c.get("x", now=6) is None
+    c.put("y", 20, now=8)                    # update resets expiry to 13
+    assert c.get("y", now=12) == 20
+    c.put("w", 4, now=12)                    # full, nothing expired: evict LRU = z
+    assert c.get("z", now=12) is None and c.get("w", now=12) == 4 and c.get("y", now=12) == 20
+    c = TTLCache(1, ttl=100)
+    c.put("k", 1, now=0); c.put("k", 2, now=1)
+    assert len(c) == 1 and c.get("k", now=2) == 2

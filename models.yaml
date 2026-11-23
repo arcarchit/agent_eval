@@ -1,0 +1,93 @@
+# Model registry. Every model is reached through an OpenAI-compatible chat API.
+# Adding a model = adding an entry here. Prices are USD per 1M tokens; check them on
+# https://openrouter.ai/models before quoting costs (assumption: prices as of writing).
+judge_model: qwen3.5-9b  # model used by the llm_judge grader
+judge_votes: 1             # ask the judge N times, take the majority (temperature 0 is not deterministic)
+
+models:
+  gpt-4o-mini:
+    provider_model: openai/gpt-4o-mini  # 128k Jul 2024
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.15, output: 0.60 }
+
+  llama-3.3-70b:                      # 131K, Dec 2024
+    provider_model: meta-llama/llama-3.3-70b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.10, output: 0.32 }
+
+  # ---- Matched pair for a fair model comparison: same size (8B), same context (128k), same era (2024),
+  # both with native tool calling. Both use the SAME provider routing (the &full_precision anchor):
+  #   quantizations      only providers serving full-precision weights (no int4/int8 copy for one model only)
+  #   require_parameters only providers that support every request field we send (e.g. tools)
+  #   allow_fallbacks    never silently switch to another provider mid-experiment
+  # If OpenRouter answers "no endpoints found", no provider matches: check the model's provider list on
+  # openrouter.ai and loosen the rule for BOTH models (for example add "fp8"), never for just one.
+  # IDs and prices were not verified from this environment: check them first.
+  llama-3.1-8b:
+    provider_model: meta-llama/llama-3.1-8b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.02, output: 0.04}
+    
+
+  ministral-8b:  # 262k, Dec 2025
+    provider_model: mistralai/ministral-8b-2512
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.15, output: 0.15 }
+    
+
+  # Judge candidate from a third family (neither Llama nor Mistral). To use it, set judge_model: qwen3.5-9b
+  # above, then run `python worker/judge_validation.py` and keep it only if kappa >= 0.8 with 0 unstable items.
+  # If it has a "thinking" mode, the extra text can break the judge's JSON: look for "unparseable output".
+  qwen3.5-9b:
+    provider_model: qwen/qwen3.5-9b                       # verify: this ID could not be checked from here
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0.05, output: 0.15 }         # verify
+    
+
+  # ---- Free models on OpenRouter ($0, but rate-limited per day/minute; a rate-limited trial is retried,
+  # then ends as "error"). Hermes needs tool calling: on openrouter.ai/models check the model lists "tools".
+  # IDs below were NOT verified from this environment (openrouter.ai was unreachable): check them first.
+  particle-1-free:
+    provider_model: particle-ai/particle-1:free          # ID as given; verify
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  nemotron-3-ultra-free:
+    provider_model: nvidia/nemotron-3-ultra-550b-a55b:free
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  gemma-4-31b-it-free:
+    provider_model: google/gemma-4-31b-it:free
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    price_per_mtok: { input: 0, output: 0 }
+
+  # ---- Direct providers (no OpenRouter). Both speak the OpenAI API, so it is config only: uncomment,
+  # put the key in .env, restart. Check the current model names in each provider's docs.
+  # grok:                                   # xAI Grok
+  #   provider_model: grok-4-fast           # verify on docs.x.ai
+  #   base_url: https://api.x.ai/v1
+  #   api_key_env: XAI_API_KEY
+  #   price_per_mtok: { input: 0.2, output: 0.5 }   # check current prices
+  # groq-llama-3.3-70b:                     # Groq (fast hosting of open models, has a free tier)
+  #   provider_model: llama-3.3-70b-versatile
+  #   base_url: https://api.groq.com/openai/v1
+  #   api_key_env: GROQ_API_KEY
+  #   price_per_mtok: { input: 0.59, output: 0.79 }  # check current prices
+
+  # Free, local, open-weight option (no API cost): install Ollama on your Mac, `ollama pull qwen3:8b`,
+  # then uncomment. From inside Docker the Mac is reachable as host.docker.internal.
+  # Small local models call tools less reliably than gpt-4o-mini, so expect lower pass rates and slower runs.
+  # qwen3-8b-local:
+  #   provider_model: qwen3:8b
+  #   base_url: http://host.docker.internal:11434/v1
+  #   api_key_env: OLLAMA_API_KEY        # Ollama ignores the key; set OLLAMA_API_KEY=ollama in .env
+  #   price_per_mtok: { input: 0, output: 0 }

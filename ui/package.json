@@ -1,0 +1,19 @@
+{
+  "name": "evals-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.11",
+    "typescript": "^5.7.2",
+    "vite": "^7.3.8",
+    "vue-tsc": "^3.3.14"
+  }
+}

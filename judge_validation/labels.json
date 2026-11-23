@@ -1,0 +1,119 @@
+{
+  "labelled_by": "author (hand-written answers and labels; review before relying on them)",
+  "items": [
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nYour refund will arrive 3 business days later than planned because of a bank holiday. No action is needed from you; we will email you once it is sent.\n\n\u2014 The ACME Team",
+      "human_label": "pass",
+      "note": "follows every rule"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nUnfortunately your refund is delayed by 3 business days due to a bank holiday.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "uses banned word 'unfortunately'"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana Reyes,\n\nYour refund is delayed by 3 business days because of a bank holiday.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "greeting uses full name"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nYour refund is delayed a little because of a bank holiday. It will arrive soon.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "no concrete number of days"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nYour refund is delayed by 3 business days because of a bank holiday.\n\nBest regards,\nACME Support",
+      "human_label": "fail",
+      "note": "wrong sign-off"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nQuick update: a bank holiday moves your refund by 3 business days. You will see it in your account after that, and we will confirm by email.\n\n\u2014 The ACME Team",
+      "human_label": "pass",
+      "note": "different wording, all rules"
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nSo sorry! Your refund is delayed by 3 business days because of the bank holiday.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "uses 'sorry' (subtle)"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Sunlight looks white but is really made of all the colours of the rainbow. When it passes through the air, the tiny bits of air bounce blue light around much more than red or yellow light. So when you look up, blue light comes at you from every direction and the sky looks blue.",
+      "human_label": "pass",
+      "note": "correct, simple, 3 sentences"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "The sky is blue because it reflects the colour of the oceans.",
+      "human_label": "fail",
+      "note": "common misconception"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Due to Rayleigh scattering, whose cross-section scales with the inverse fourth power of wavelength, shorter wavelengths dominate the diffuse skylight spectrum.",
+      "human_label": "fail",
+      "note": "jargon, not for a child"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Sunlight has every colour in it. Air scatters blue light the most. That scattered blue light reaches your eyes from all over the sky. That is why the sky looks blue. At sunset it turns orange.",
+      "human_label": "fail",
+      "note": "5 sentences, over the limit"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Light from the sun is a mix of colours. Air bumps blue light around much more than the other colours, so blue fills the whole sky.",
+      "human_label": "pass",
+      "note": "short and correct"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "- On 2025-05-02, checkout failed for about 30% of users for ~45 minutes (14:05-14:50 UTC).\n- Root cause: a config deploy cut the payment service DB connection pool from 50 to 5, so it ran out under normal traffic and requests timed out.\n- Fix: the config was rolled back at 14:47, and a CI check now blocks pool sizes below 20.",
+      "human_label": "pass",
+      "note": "complete and accurate"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "- Checkout failed for 30% of users.\n- Root cause: the database server crashed due to a hardware fault.\n- Fix: the database was restarted.",
+      "human_label": "fail",
+      "note": "invented root cause"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "- Checkout failed for ~30% of users for 45 minutes on 2025-05-02.\n- A config deploy shrank the DB connection pool from 50 to 5 and it was exhausted.\n- The config was rolled back.",
+      "human_label": "fail",
+      "note": "missing the CI check (subtle)"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "Checkout broke for about 30% of users for 45 min because a config change reduced the DB pool from 50 to 5. It was rolled back and a CI check now prevents pool sizes under 20.",
+      "human_label": "fail",
+      "note": "not 3 bullet points"
+    },
+    {
+      "task_id": "judge-02",
+      "answer": "* What happened: ~30% of checkout requests failed from 14:05 to 14:50 UTC on 2 May 2025.\n* Root cause: a 14:03 config deploy reduced the payment DB connection pool from 50 to 5, which was exhausted under normal load.\n* Fix: rollback at 14:47; new CI check rejects pool sizes below 20.",
+      "human_label": "pass",
+      "note": "different bullet style, complete"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "Sunlight is made of many colours and the air scatters the blue part the most, so blue light spreads across the whole sky. That is why we see blue above us.",
+      "human_label": "pass",
+      "note": "correct, 2 sentences"
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "The sky looks blue because of a process called scattering. When sunlight enters the Earth's atmosphere, it hits tiny particles and spreads out in all directions. Blue light is scattered more than other colors because it travels in shorter, smaller waves, making the sky appear blue to our eyes.",
+      "human_label": "pass",
+      "note": "real answer from experiment e181b969; the old rubric gave it 3 pass / 4 fail over 'is scattering jargon?'"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+id: hard-05
+category: hard
+difficulty: hard
+needs: skill:acme-billing
+prompt: 'orders.json lists ACME invoices. For each one, compute its ACME invoice ID, the ACME fiscal quarter of
+  its issue date, and the late fee in dollars (2 decimals), all under ACME billing rules. Write report.json: a list
+  of objects with keys invoice_id, fiscal_quarter, late_fee, sorted by invoice_id.'
+setup_files:
+  orders.json: |
+    [
+      {
+        "customer": "Wayne Enterprises",
+        "seq": 3,
+        "issued": "2025-02-27",
+        "amount": 1500.0,
+        "days_late": 0
+      },
+      {
+        "customer": "Stark Industries",
+        "seq": 118,
+        "issued": "2025-11-30",
+        "amount": 980.5,
+        "days_late": 14
+      },
+      {
+        "customer": "Acme Rockets",
+        "seq": 9,
+        "issued": "2026-01-02",
+        "amount": 2400.0,
+        "days_late": 39
+      },
+      {
+        "customer": "Oscorp",
+        "seq": 42,
+        "issued": "2025-06-01",
+        "amount": 333.33,
+        "days_late": 15
+      }
+    ]
+grader:
+  type: file_check
+  path: report.json
+  json_equals:
+  - invoice_id: ACME-25-OSC-0042
+    fiscal_quarter: FY25-Q2
+    late_fee: 20.0
+  - invoice_id: ACME-25-STA-0118
+    fiscal_quarter: FY25-Q3
+    late_fee: 39.22
+  - invoice_id: ACME-25-WAY-0003
+    fiscal_quarter: FY24-Q4
+    late_fee: 0.0
+  - invoice_id: ACME-26-ACM-0009
+    fiscal_quarter: FY25-Q4
+    late_fee: 240.0

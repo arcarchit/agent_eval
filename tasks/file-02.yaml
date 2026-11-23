@@ -1,0 +1,14 @@
+id: file-02
+category: files
+prompt: "How many lines in app.log contain the word ERROR? Reply with JSON only, like {\"answer\": \"<number>\"}."
+setup_files:
+  app.log: |
+    10:00:01 INFO server started
+    10:00:05 ERROR db connection refused
+    10:00:06 WARN retrying
+    10:00:09 ERROR db connection refused
+    10:01:00 INFO request /health 200
+    10:01:30 DEBUG cache warmed
+    10:02:00 ERROR timeout on /orders
+    10:03:00 INFO request /orders 200
+grader: { type: exact, expected: "3" }

@@ -1,0 +1,4 @@
+id: text-01
+category: reasoning
+prompt: "Write the word 'evaluation' backwards. Reply with JSON only, like {\"answer\": \"<reversed word>\"}."
+grader: { type: exact, expected: "noitaulave" }

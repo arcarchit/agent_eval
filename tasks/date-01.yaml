@@ -1,0 +1,4 @@
+id: date-01
+category: reasoning
+prompt: "What day of the week was 2024-02-29? Reply with JSON only, like {\"answer\": \"<day name>\"}."
+grader: { type: exact, expected: "thursday" }

@@ -1,0 +1,7 @@
+id: mem-01
+category: memory
+needs: memory
+memory_setup:
+  - "Please remember this for later sessions: our staging server host is staging-7.internal and it listens on port 8443."
+prompt: "What is the https URL of our staging server, including the port? Reply with JSON only, like {\"answer\": \"<url>\"}."
+grader: { type: regex, pattern: '^https://staging-7\.internal:8443/?$' }

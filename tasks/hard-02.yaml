@@ -1,0 +1,28 @@
+id: hard-02
+category: hard
+difficulty: hard
+prompt: 'app.log interleaves many requests. A request''s duration is from its START line to the FIRST END line for
+  the same req id after that START. Requests with no END are still running and must be ignored, and an END with
+  no pending START is noise. Which request id had the longest completed duration? Reply with JSON only, like {"answer":
+  "<req id>"}.'
+setup_files:
+  app.log: |
+    09:59:58.100 START req=a17 path=/orders
+    09:59:58.900 START req=b02 path=/health
+    09:59:59.050 END req=b02 status=200
+    09:59:59.400 START req=c33 path=/checkout
+    10:00:00.250 START req=d41 path=/search
+    10:00:01.000 END req=a17 status=200
+    10:00:01.300 START req=e05 path=/upload
+    10:00:02.950 END req=d41 status=200
+    10:00:03.100 START req=f66 path=/report
+    10:00:04.420 END req=c33 status=500
+    10:00:04.500 START req=g90 path=/orders
+    10:00:05.600 END req=e05 status=201
+    10:00:05.900 RETRY req=c33 attempt=2
+    10:00:06.000 END req=g90 status=200
+    10:00:09.990 START req=h12 path=/export
+    10:00:10.000 END req=b02 status=200
+grader:
+  type: exact
+  expected: c33

@@ -1,0 +1,59 @@
+id: hard-04
+category: hard
+difficulty: hard
+prompt: 'This small shop project has bugs: pricing.py and inventory.py do not follow the rules in README.md. Fix
+  the code in place so it follows README.md exactly. Keep the function and class names.'
+setup_files:
+  README.md: |
+    # Shop
+    Price of an order (pricing.total):
+    1. subtotal = sum(unit_price * qty)
+    2. apply the discount code to the subtotal (SAVE10 = 10% off, SAVE20 = 20% off, unknown codes = no discount)
+    3. add tax (rate given) on the DISCOUNTED subtotal
+    4. round to 2 decimals (round half up)
+    Stock (inventory.Inventory.reserve): reserving more than is in stock must raise ValueError and change nothing.
+  pricing.py: |
+    from decimal import Decimal, ROUND_HALF_UP
+
+    DISCOUNTS = {"SAVE10": Decimal("0.10"), "SAVE20": Decimal("0.20")}
+
+
+    def total(lines, tax_rate, code=None):
+        subtotal = sum(Decimal(str(price)) * qty for price, qty in lines)
+        taxed = subtotal * (1 + Decimal(str(tax_rate)))
+        discount = DISCOUNTS.get(code, Decimal("0"))
+        result = taxed - subtotal * discount
+        return float(result.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+  inventory.py: |
+    class Inventory:
+        def __init__(self, stock):
+            self.stock = dict(stock)
+
+        def reserve(self, item, qty):
+            self.stock[item] = self.stock.get(item, 0) - qty
+            if self.stock[item] < 0:
+                raise ValueError(f"not enough {item}")
+            return self.stock[item]
+grader:
+  type: unit_test
+  test_code: |
+    from pricing import total
+    from inventory import Inventory
+    assert total([(10.0, 2), (5.0, 1)], 0.10) == 27.5
+    assert total([(10.0, 2), (5.0, 1)], 0.10, "SAVE10") == 24.75     # (25 - 2.5) * 1.1
+    assert total([(19.99, 3)], 0.08, "SAVE20") == 51.81              # 59.97 * 0.8 = 47.976 -> * 1.08 = 51.81408
+    assert total([(1.0, 1)], 0.0, "BOGUS") == 1.0
+    inv = Inventory({"pen": 3})
+    assert inv.reserve("pen", 2) == 1
+    try:
+        inv.reserve("pen", 5)
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    assert inv.stock["pen"] == 1                                     # unchanged after a failed reserve
+    try:
+        inv.reserve("ink", 1)
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    assert inv.stock.get("ink", 0) == 0

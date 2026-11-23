@@ -1,0 +1,4 @@
+id: arith-02
+category: reasoning
+prompt: "What is 17% of 2,340, rounded to the nearest whole number? Reply with JSON only, like {\"answer\": \"<number>\"}."
+grader: { type: exact, expected: "398" }
