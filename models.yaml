@@ -1,21 +1,21 @@
 # Model registry. Every model is reached through an OpenAI-compatible chat API.
 # Adding a model = adding an entry here. Prices are USD per 1M tokens; check them on
 # https://openrouter.ai/models before quoting costs (assumption: prices as of writing).
-judge_model: gpt-4o-mini   # model used by the llm_judge grader
+judge_model: qwen3.5-9b  # model used by the llm_judge grader
 judge_votes: 5             # ask the judge 5 times, take the majority (temperature 0 is not deterministic)
 
 models:
   gpt-4o-mini:
-    provider_model: openai/gpt-4o-mini
+    provider_model: openai/gpt-4o-mini  # 128k Jul 2024
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     price_per_mtok: { input: 0.15, output: 0.60 }
 
-  llama-3.3-70b:                      # open-weight model, different provider
+  llama-3.3-70b:                      # 131K, Dec 2024
     provider_model: meta-llama/llama-3.3-70b-instruct
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
-    price_per_mtok: { input: 0.13, output: 0.40 }
+    price_per_mtok: { input: 0.10, output: 0.32 }
 
   # ---- Matched pair for a fair model comparison: same size (8B), same context (128k), same era (2024),
   # both with native tool calling. Both use the SAME provider routing (the &full_precision anchor):
@@ -29,15 +29,15 @@ models:
     provider_model: meta-llama/llama-3.1-8b-instruct
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
-    price_per_mtok: { input: 0.02, output: 0.05 }
-    provider_routing: &full_precision { quantizations: [bf16, fp16], require_parameters: true, allow_fallbacks: false }
+    price_per_mtok: { input: 0.02, output: 0.04}
+    
 
-  ministral-8b:
-    provider_model: mistralai/ministral-8b
+  ministral-8b:  # 262k, Dec 2025
+    provider_model: mistralai/ministral-8b-2512
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
-    price_per_mtok: { input: 0.10, output: 0.10 }
-    provider_routing: *full_precision
+    price_per_mtok: { input: 0.15, output: 0.15 }
+    
 
   # Judge candidate from a third family (neither Llama nor Mistral). To use it, set judge_model: qwen3.5-9b
   # above, then run `python worker/judge_validation.py` and keep it only if kappa >= 0.8 with 0 unstable items.
@@ -47,7 +47,7 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     price_per_mtok: { input: 0.05, output: 0.15 }         # verify
-    provider_routing: *full_precision
+    
 
   # ---- Free models on OpenRouter ($0, but rate-limited per day/minute; a rate-limited trial is retried,
   # then ends as "error"). Hermes needs tool calling: on openrouter.ai/models check the model lists "tools".
