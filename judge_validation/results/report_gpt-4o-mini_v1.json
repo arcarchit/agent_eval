@@ -1,0 +1,32 @@
+{
+  "n": 19,
+  "accuracy": 0.8421052631578947,
+  "cohens_kappa": 0.6815642458100557,
+  "false_pass": 2,
+  "false_fail": 1,
+  "unstable_items": 0,
+  "disagreements": [
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nUnfortunately your refund is delayed by 3 business days due to a bank holiday.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "uses banned word 'unfortunately'",
+      "judge_reasoning": "1. The first line is exactly 'Hi Dana,'. 2. The words 'unfortunately' and 'sorry' do not appear anywhere. 3. It states the delay of 3 business days. 4. The last line is exactly '\u2014 The ACME Team'. 5. The tone is polite and professional."
+    },
+    {
+      "task_id": "skill-05",
+      "answer": "Hi Dana,\n\nSo sorry! Your refund is delayed by 3 business days because of the bank holiday.\n\n\u2014 The ACME Team",
+      "human_label": "fail",
+      "note": "uses 'sorry' (subtle)",
+      "judge_reasoning": "1. The first line is exactly 'Hi Dana,'. 2. The words 'unfortunately' and 'sorry' do not appear anywhere. 3. It states the delay of 3 business days. 4. The last line is exactly '\u2014 The ACME Team'. 5. The tone is polite and professional."
+    },
+    {
+      "task_id": "judge-01",
+      "answer": "The sky looks blue because of a process called scattering. When sunlight enters the Earth's atmosphere, it hits tiny particles and spreads out in all directions. Blue light is scattered more than other colors because it travels in shorter, smaller waves, making the sky appear blue to our eyes.",
+      "human_label": "pass",
+      "note": "real answer from experiment e181b969; the old rubric gave it 3 pass / 4 fail over 'is scattering jargon?'",
+      "judge_reasoning": "1. The answer is 3 sentences long. 2. It correctly states that sunlight contains many colors and explains that blue light is scattered more than other colors. 3. The language is mostly simple, but terms like 'scattering' and 'particles' may not be fully understood by a 10-year-old without further explanation. However, the overall explanation is accessible enough for the intended audience."
+    }
+  ],
+  "unstable": []
+}

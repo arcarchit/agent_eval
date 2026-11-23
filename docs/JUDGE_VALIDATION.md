@@ -57,30 +57,59 @@ That gap in the validation is the lesson.
    labelled examples where repeated calls on the same input disagreed. The exact answer above was added to
    `judge_validation/labels.json` with human label **pass**, so this regression is now part of the test set.
 
-## How to reproduce the before/after numbers
+## Validation results (after the changes)
 
+**Acceptance rule:** kappa ≥ 0.8, at most 1 false pass, and 0 unstable items after the majority vote.
+How kappa is computed, with this table's first row worked through: [STATISTICS.md](STATISTICS.md#judge-agreement-cohens-kappa).
+
+Run on 2026-11-23 with the new rubric, 19 hand-labelled answers (`judge_validation/labels.json`), two judge
+candidates, 1 and 5 votes. Full reports, including every disagreement and the judge's reasoning:
+`judge_validation/results/report_<judge>_v<votes>.json`.
+
+| Judge | Votes | Accuracy | Cohen's kappa | False pass | False fail | Unstable items | Meets rule? |
+|-------|-------|----------|---------------|------------|------------|----------------|-------------|
+| gpt-4o-mini | 1 | 84.2% (16/19) | 0.68 | 2 | 1 | 0 | no |
+| gpt-4o-mini | 5 | 84.2% (16/19) | 0.68 | 2 | 1 | 1 | no |
+| qwen3.5-9b | 1 | 78.9% (15/19) | 0.54 | 0 | 4 | 0 | no |
+| qwen3.5-9b | 5 | 57.9% (11/19) | 0.04 | 1 | 7 | 8 | no |
+
+**No judge meets the acceptance rule, so the 3 judge-graded tasks are not yet trustworthy.** What the
+disagreements show:
+
+1. **gpt-4o-mini misses banned words (2 false passes, `skill-05`).** Both answers contain a word the rubric
+   bans ("unfortunately", "sorry"). The judge says, 5 votes out of 5, *"the words 'unfortunately' and 'sorry'
+   do not appear anywhere"*. This is a **consistent** error, so majority voting cannot fix it: voting only
+   removes random disagreement. Lesson: literal checks (a word is present, the first line is exactly X)
+   belong in a deterministic grader, not a judge.
+2. **The rubric fix for `judge-01` did not hold for gpt-4o-mini.** The real answer from e181b969, labelled
+   pass, now gets 1 pass / 4 fail (before: 3 pass / 4 fail). The judge still calls "scattering" jargon, even
+   though the new rubric explicitly allows that word. The vote made the verdict *more consistent*, and
+   consistently wrong.
+3. **qwen3.5-9b is unusable as configured.** It is a "thinking" model: most replies start with
+   "Thinking Process:" or are empty instead of the requested JSON. The grader counts unparseable output as a
+   fail vote, so its false fails and its 8 unstable items mostly measure parse failures, not judgement.
+   Where it did return JSON, it also missed a banned word.
+
+### Next steps (not done yet)
+- Split `skill-05`: a regex/exact grader for the literal rules (greeting line, banned words, sign-off), and
+  the judge only for tone. That removes both gpt-4o-mini false passes.
+- Count an unparseable judge reply as *no vote* (and error the trial if every vote is unparseable), instead
+  of a fail vote.
+- Rework `judge-01` (e.g. give the judge the list of allowed words as a check it must apply first), then
+  re-run this validation.
+- Until then, report results with and without the 3 judge tasks.
+
+### Reproduce
 ```bash
-# "before" behaviour: a single call, run it a few times and compare verdicts
-git show 653012a:tasks/judge-01.yaml > /tmp/old-judge-01.yaml   # the old rubric, for reference
-python worker/judge_validation.py --votes 1
-
-# "after": majority of 5 with the new rubric
+python worker/judge_validation.py --votes 1   # uses judge_model from models.yaml
 python worker/judge_validation.py --votes 5
 ```
-
-| Metric | Before (single call, old rubric) | After (5 votes, new rubric) |
-|--------|----------------------------------|-----------------------------|
-| Same answer in experiment e181b969 | 3 pass / 4 fail | TODO: re-run the experiment |
-| Accuracy vs 19 labels | TODO | TODO |
-| Cohen's kappa | TODO | TODO |
-| Unstable items | not measured | TODO |
-
-Fill the TODOs from the script output. **Acceptance rule:** kappa ≥ 0.8, at most 1 false pass, and 0 unstable
-items after the majority vote.
 
 ## Interview version (30 seconds)
 "In my first real run, the same answer got 3 passes and 4 fails from the judge at temperature 0. The rubric
 said 'no jargon' and the judge kept arguing about whether 'scattering' is jargon. My validation only checked
 agreement with human labels, one call per example, so it was blind to this. I made the rubric explicit about
 what counts as jargon, added a 5-vote majority with every vote stored, added an instability metric to the
-validation, and turned the real answer into a labelled regression example."
+validation, and turned the real answer into a labelled regression example. Then the validation itself told me
+the fix was not enough: kappa 0.68, and the judge said a banned word was absent five times out of five. Voting
+fixes random errors, not consistent ones, so literal rules have to move to a deterministic grader."
