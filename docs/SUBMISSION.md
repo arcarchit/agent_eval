@@ -8,8 +8,8 @@ the full document. A reviewer can read only this page and drill down where inter
 | 1 | Source code + README (setup, add a task / harness / model) | repo root, [README](../README.md), [GUIDE](GUIDE.md) | done |
 | 2 | Design document | [DESIGN.md](DESIGN.md) (+ [JUDGE_VALIDATION.md](JUDGE_VALIDATION.md)) | done |
 | 3 | Known limits | [FEATURES.md → Known limitations](FEATURES.md#known-limitations) | done |
-| 4 | Cost estimate (formula + actual spend + how to reduce) | [USAGE_AND_COST.md](USAGE_AND_COST.md) | formula done; **actual spend: TODO after the final run** |
-| 5 | One real experiment | [EXPERIMENT.md](EXPERIMENT.md) | setup done; **results: TODO** |
+| 4 | Cost estimate (formula + actual spend + how to reduce) | [USAGE_AND_COST.md](USAGE_AND_COST.md) | done (actual spend $0.0705 for 260 trials) |
+| 5 | One real experiment | [EXPERIMENT.md](EXPERIMENT.md) | done: Llama 3.3 70B vs Ministral 8B, no significant difference |
 | 6 | Video (≤ 10 min) | script below | **TODO: record** |
 
 ---
@@ -20,7 +20,7 @@ the full document. A reviewer can read only this page and drill down where inter
 - **Run**: `docker compose up --build` (keys in `.env`), or `./scripts/run-local.sh` without Docker.
 - **README** covers setup. The step-by-step tutorials are in [GUIDE.md](GUIDE.md): [add a task](GUIDE.md#3-add-a-task),
   [add a model](GUIDE.md#4-add-a-model), [add a harness](GUIDE.md#5-add-a-harness) (with a complete, tested example adapter).
-- **Tests**: 21 Python (graders, harnesses, isolation, grader secrecy, provider errors, failure rules, judge voting, identical request fields across harnesses) and
+- **Tests**: 23 Python (graders, harnesses, isolation, grader secrecy, provider errors, failure rules, truncation, judge voting, identical request fields across harnesses) and
   12 API (statistics, config versioning, runner retry/timeout/crash/resume/cancel/circuit breaker). They need no API key.
 - **Task set**: 26 tasks with mixed graders: exact/regex 12, file-state 5, hidden unit tests 6, LLM judge 3 (these overlap the
   categories below).
@@ -39,7 +39,7 @@ the full document. A reviewer can read only this page and drill down where inter
 | Harness and model adapter interfaces | [§2](DESIGN.md#2-adapter-interfaces) | `Harness.run(task, config, model, workspace, home) -> Trace`. A model is a `models.yaml` entry (OpenAI-compatible). A new X or Y is one class or one YAML entry. |
 | Data model | [§3](DESIGN.md#3-data-model-sqlite-apisrcdbts) | `configs` (immutable `name@vN`, content hash, model snapshot), `experiments` (task snapshot), `trials` (status, grade, trace, tokens, cost, latency, LLM calls, turns). |
 | Isolation and reproduction | [§4](DESIGN.md#4-isolation-and-reproducibility) | Fresh process + temp workspace + temp harness home per trial. Memory crosses sessions only inside one trial, and only if enabled. Graders never reach the agent. Rerun = same config versions on the same task snapshot. |
-| Grader design and validation | [§5](DESIGN.md#5-graders-and-how-they-were-validated), [JUDGE_VALIDATION.md](JUDGE_VALIDATION.md) | Deterministic graders where possible. JSON answer extraction. Hidden unit tests are written after the agent finishes. LLM judge: all-points rubric, 5-vote majority, validated with accuracy, Cohen's kappa and an instability check. A real instability (3 passes / 4 fails on the same answer) was found and fixed. |
+| Grader design and validation | [§5](DESIGN.md#5-graders-and-how-they-were-validated), [JUDGE_VALIDATION.md](JUDGE_VALIDATION.md) | Deterministic graders where possible. JSON answer extraction. Hidden unit tests are written after the agent finishes. LLM judge: all-points rubric, 5-vote majority, validated with accuracy, Cohen's kappa and an instability check. A real instability (3 passes / 4 fails on the same answer) was found; the validation then showed the judge still misses the bar (kappa 0.68 < 0.8; it misses banned words 5/5 times), so judge tasks are reported separately. |
 | Statistical method and how N was chosen | [§6](DESIGN.md#6-statistical-method) | Task is the unit of analysis; paired per-task differences; bootstrap CI over tasks; the verdict says "no significant difference" when the CI contains 0. **N chosen by simulating our own method**: false positive rate ≈ 5% (calibrated); power for a skills-sized effect is 73% at N=5 and 88% at N=10, so **N=10** for the reported experiment. |
 
 ## 3. Known limits → [FEATURES.md](FEATURES.md#known-limitations)
@@ -67,10 +67,8 @@ cost = tasks × trials × configs × (avg_input_tokens × price_in + avg_output_
 - **$0.0007–0.0009 per trial**;
 - a judge call costs ≈ $0.0001.
 
-**Reported experiment (24 tasks × N=10 × 2 configs):** ≈ 1,700 requests, **≈ $0.45**.
-
-**Actual spend:** TODO. Take it from the experiment page (total cost per config) plus `judge_cost_usd` in the CSV export.
-The discarded first attempt cost about $0.08.
+**Actual spend (reported experiment `33037e1d`, 26 tasks × N=5 × 2 configs = 260 trials):** models $0.0680 + judge
+$0.0025 = **$0.0705**, about $0.00027 per trial. The discarded first attempt cost about $0.08.
 
 **How to reduce it:** prompt caching of the harness system prompt; early stopping (N=2 first, then add trials only
 where configs disagree); task sampling for quick checks; a result cache for identical trials; deterministic graders
@@ -78,12 +76,16 @@ where configs disagree); task sampling for quick checks; a result cache for iden
 
 ## 5. One real experiment → [EXPERIMENT.md](EXPERIMENT.md)
 
-- **Single axis:** Hermes + gpt-4o-mini, **skills on vs off**. Everything else is identical (file tools, memory off, temperature 0, 10 steps).
-- **Hypothesis:** skills raise the pass rate on the 6 skill-dependent tasks, with no significant change elsewhere and a small rise in tokens per trial.
-- **Setup:** 24 tasks (memory tasks excluded, with the reason given), N=10, 480 trials.
-- **Results with CIs, 2–3 inspected trajectories, conclusion:** TODO after the run.
-- **Already documented from the first attempt** (discarded because OpenRouter credits ran out mid-run): the bugs it exposed and how
-  they were fixed, plus candidate trajectories (`e181b969-39` vs `-38`, `-115` vs `-30`).
+- **Single axis:** the model. Baseline harness, file + terminal tools, both skills, memory off, temperature 0,
+  10 steps, 1,024 tokens. A = Llama 3.3 70B, B = Ministral 8B.
+- **Hypothesis** (stated honestly as not pre-registered): the 70B model passes more tasks and costs more.
+- **Setup:** 26 tasks × N=5 × 2 configs = 260 trials, 0 errors.
+- **Result:** A 28.5% [13.1, 45.4] vs B 35.4% [20.0, 53.1]; A − B = −6.9 points, 95% CI [−23.1, +9.2], p ≈ 0.41 →
+  **no significant difference** (same verdict without the 3 judge tasks, whose grades were mostly judge parse failures).
+- **Trajectories:** Llama writes tool calls and code as chat text instead of calling tools (`code-01`, `code-04`,
+  `hard-01`); Ministral reads the ACME rule but builds a 4-letter customer code (`skill-01`) and does mental
+  arithmetic wrong (`arith-01`).
+- **Conclusion:** hypothesis not supported; the models fail in different ways; Ministral costs 60% more per trial.
 
 ## 6. Video script (≤ 10 min)
 
@@ -104,14 +106,14 @@ where configs disagree); task sampling for quick checks; a result cache for iden
 | **Eval methodology** | Task-level paired bootstrap; calibration and power checked by simulation; errors excluded, not counted as failures; validated judge with an instability check; hidden graders |
 | **Abstraction** | `Harness` interface (2 adapters + a tested tutorial adapter); models as config; the core never changes |
 | **Observability** | Full trajectory with per-step timing, tool calls and results, memory reads/writes, skills used, session boundaries, grader reasoning, failure category; CLI with `--keep` |
-| **Engineering quality** | 33 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
+| **Engineering quality** | 35 tests; resume after restart; atomic writes; retries with backoff; timeouts; circuit breaker; 0 `npm audit` vulnerabilities; one-command run |
 | **Judgment** | Scope cuts listed in [internal/DECISIONS.md](internal/DECISIONS.md); limits in FEATURES; first-run bugs found and documented honestly |
 
 ## Before submitting (checklist)
 
-- [ ] Add OpenRouter credits (or pick a model whose daily cap fits ~1,700 requests).
-- [ ] `python worker/judge_validation.py --votes 1`, then `--votes 5`: fill in the before/after table in JUDGE_VALIDATION.md.
-- [ ] Run the experiment exactly as in EXPERIMENT.md. Fill in the results, CIs, 2–3 trajectories, the conclusion, and the actual spend (here and in EXPERIMENT.md).
+- [x] Judge validation run; results (below the acceptance bar) written up in JUDGE_VALIDATION.md.
+- [x] Real experiment written up with results, CIs, trajectories, conclusion and actual spend (EXPERIMENT.md).
+- [ ] Rebuild the container (`docker compose up -d --build`) so the UI shows the system prompt, truncation warnings and failure tooltips.
 - [ ] Record the video, following the script above.
 - [ ] Merge the branch into `main`, so the reviewer sees everything on the default branch.
 - [ ] Decide whether to share `docs/internal/` (interview prep notes). Consider removing `internal/PLAN.md` and `internal/LEARNING_NOTES.md` from the submitted repo.

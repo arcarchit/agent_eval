@@ -93,15 +93,18 @@ Tasks, skills and models are files in git, so they are versioned by git. Hermes 
 by hand or with a script (for example the weekday of 2024-02-29). Ambiguous tasks were rewritten: an earlier
 `file-02` had a line `DEBUG ERROR_COUNT=2`, so "lines containing ERROR" could be 3 or 4.
 
-**Judge validation**: `judge_validation/labels.json` has 18 answers (7 pass, 11 fail) for the three judge tasks.
+**Judge validation**: `judge_validation/labels.json` has 19 answers (8 pass, 11 fail) for the three judge tasks.
 They include subtle failures: "So sorry!" where "sorry" is banned, a missing CI-check fix, 5 sentences when
-the limit is 3. `worker/judge_validation.py` reports accuracy, Cohen's kappa, false passes and false fails.
+the limit is 3. `worker/judge_validation.py` reports accuracy, Cohen's kappa ([how it is computed](STATISTICS.md#judge-agreement-cohens-kappa)), false passes and false fails.
 It also reports **instability**: examples where repeated calls on the same input disagreed.
 **Acceptance rule**: kappa ≥ 0.8, at most 1 false pass, and 0 unstable items. Otherwise fix the rubric before
 trusting judge tasks. See `docs/JUDGE_VALIDATION.md` for a real instability found in the first experiment
-(the same answer got 3 passes and 4 fails) and how it was fixed.
+(the same answer got 3 passes and 4 fails), what was changed, and the latest validation: gpt-4o-mini reaches
+kappa 0.68, below the bar, so the 3 judge tasks are reported separately until literal rules move to deterministic graders.
 
 ## 6. Statistical method
+
+A step-by-step explanation with a worked example from a real experiment is in [STATISTICS.md](STATISTICS.md).
 
 - **Unit of analysis = task.** For each config and task, average the N trials into a pass rate. Trials of the same
   task are correlated, so treating 21×5 trials as 105 independent samples would make the CIs falsely narrow.
@@ -160,12 +163,28 @@ tells you how large an effect could have been missed.
 
 ## 7. Failure analysis (`worker/failures.py`)
 
-Rules over the trace, first match wins: `timeout`, `provider_error` (safety net; such trials should already be
-`error`), `step_exhaustion` (hit `max_steps`), `loop` when the harness's own loop guard stopped it, `hallucinated_tool`
-(called a tool not offered), `bad_tool_args` (arguments not valid JSON), `tool_errors` (most tool calls
-failed), `loop` (same call 3+ times), `gave_up` (empty final answer), `wrong_answer`. The UI shows the counts
-per config, so a regression points to a cause. For example, "skills off → wrong_answer on skill-*" means the
-model guessed the format.
+Every failed trial gets exactly one category. Rules run over the trace in this order; the first match wins.
+This table is the reference; the UI shows the same text as a tooltip (`FAILURE_HELP` in `ui/src/api.ts`).
+
+| Category | Rule | What it usually means |
+|----------|------|-----------------------|
+| `timeout` | trial exceeded the config's `timeout_s` | agent or tool hung, or a very slow model |
+| `provider_error` | `stop_reason == "error"` | safety net only: API failures normally end as status `error` and are excluded |
+| `step_exhaustion` | hit `max_steps` | going in circles, or the budget is too small for the task |
+| `loop` | the harness's loop guard stopped it | Hermes detected a repeating tool loop |
+| `truncated` | a reply hit `max_tokens` and the turn ended | a config limit: raise `max_tokens`, or the model rambles / thinks too long |
+| `hallucinated_tool` | called a tool name that was not offered | invented a tool, or a malformed call (e.g. the JSON arguments put in the name field) |
+| `bad_tool_args` | tool arguments were not valid JSON | weak tool-calling format |
+| `tool_errors` | at least half (and ≥ 2) of the tool calls returned errors | wrong paths, wrong arguments |
+| `loop` | the same call (name + arguments) 3+ times | stuck, without the harness noticing |
+| `gave_up` | empty final answer | stopped without answering |
+| `wrong_answer` | none of the above | finished normally; the grader failed the answer |
+
+The UI shows the counts per config, so a regression points to a cause. For example, "skills off →
+wrong_answer on skill-*" means the model guessed the format.
+
+Precedence matters: a trial that both hallucinated a tool and gave a wrong answer is counted once, as
+`hallucinated_tool`. Treat the categories as a first pointer and confirm by opening the trajectory.
 
 Not implemented: "grader disagreement" (it would need two graders per task). It is listed as future work.
 

@@ -1,71 +1,111 @@
-# Experiment: does enabling skills help Hermes?
+# Experiment: Llama 3.3 70B vs Ministral 8B in the same harness
 
-> **First attempt (e181b969) was discarded:** OpenRouter credits ran out mid-run, and 116 of 210 trials got
-> HTTP 402. The platform graded them as `wrong_answer`, which was a bug (now fixed: such trials end as `error`
-> and are excluded). The run also showed exact match was too strict and the judge was unstable; see
-> `docs/JUDGE_VALIDATION.md`. Good trajectories from it: `e181b969-39` vs `-38` (skill-05), `-115` vs `-30` (skill-01).
->
-> **Status: setup ready, results not yet filled in.** Running this needs an OpenRouter key and costs
-> about $0.40. Fill in every `TODO` from the experiment page. Do not edit numbers by hand.
+Experiment `33037e1d` ("m vs l (b-s-ft)"), run 2026-11-23. Every number below comes from the experiment page
+(`api/src/stats.ts`); the method is explained in [STATISTICS.md](STATISTICS.md).
 
-## One axis
-Same harness (Hermes), same model (`gpt-4o-mini`), same tools (`file`), memory off, temperature 0, max 10 steps.
-**Only difference: skills.**
+## One axis: the model
+Same harness (the baseline tool loop), same tools (`file` + `terminal`), same skills (`acme-billing`,
+`acme-style`), memory off, temperature 0, max 10 steps, max 1,024 output tokens per reply, timeout 300 s.
+**Only difference: the model.**
 
-| Config | Skills |
-|--------|--------|
-| `hermes-skills` | `acme-billing`, `acme-style` |
-| `hermes-noskills` | none |
+| Config | Model | Price per 1M tokens (in / out) |
+|--------|-------|--------------------------------|
+| A = `b-l-s-ft@v1` | `meta-llama/llama-3.3-70b-instruct` | $0.10 / $0.32 |
+| B = `b-m-s-ft@v1` | `mistralai/ministral-8b-2512` | $0.15 / $0.15 |
+
+Both reached through OpenRouter, no provider pinning.
 
 ## Hypothesis
-1. With skills, Hermes passes the 6 skill-dependent tasks (`skill-*` and `hard-05`) much more often: they depend on made-up ACME rules
-   (invoice ID format, late-fee rule, fiscal calendar, JSON schema, email style) that a model cannot know.
-2. On the other 18 tasks there is no significant difference.
-3. Skills cost more tokens per trial (the skills index is added to the prompt, and `skill_view` adds a step).
+Not pre-registered: this write-up was done after the run, so the hypothesis below is the prior we would have
+stated, not a prediction we committed to beforehand.
 
-Prediction: overall difference A − B of about +15 to +20 points, with the 95% CI above 0, all of it coming from the skill-dependent tasks.
+1. The 70B model passes more tasks than the 8B model, mainly on the multi-step `hard-*` and `code-*` tasks.
+2. Both do equally well on easy tasks (`arith`, `date`, `file`) and equally badly on the memory tasks (memory is off).
+3. The 70B model costs more per trial.
 
 ## Setup
-- 24 tasks × N=10 trials × 2 configs = 480 trials (≈ $0.45 on gpt-4o-mini, ≈ 1,700 requests). `mem-01`/`mem-02` are excluded: memory is off in both configs, so
-  they can only fail, and with skills on, Hermes was seen saving the fact as a skill instead, which would blur the one axis.
-- **Why N=10:** the power simulation in `docs/DESIGN.md` §6 shows N=5 detects a skills-sized effect only ~73% of the
-  time, and N=10 ~88%. If you are limited to a free model's daily request cap, N=5 (~850 requests) is the fallback;
-  say in the results that it is about 73% powered.
-- Hermes commit `611f0ab7`, task snapshot stored in the experiment row (id: `TODO`).
+- 26 tasks × N=5 trials × 2 configs = **260 trials**, all finished: 0 errors, 0 cancelled. Wall time about 5 minutes.
+- All 26 tasks, including `mem-01`/`mem-02` (both configs fail them: memory is off) and the 3 judge-graded tasks.
+- **Why N=5:** the power simulation (DESIGN.md §6) gives ~73% power for a large, skills-sized effect at N=5. This run
+  can detect a large difference between the models, not a small one.
+- Judge: `qwen3.5-9b`, 1 vote (the `models.yaml` setting at run time).
 
-Reproduce with the UI, or with curl:
-```bash
-B=http://localhost:3000/api; H='Content-Type: application/json'
-curl -XPOST $B/configs -H "$H" -d '{"name":"hermes-skills","harness":"hermes","model":"gpt-4o-mini","skills":["acme-billing","acme-style"],"tools":["file"]}'
-curl -XPOST $B/configs -H "$H" -d '{"name":"hermes-noskills","harness":"hermes","model":"gpt-4o-mini","tools":["file"]}'
-# all tasks except mem-01 / mem-02 (see Setup above)
-curl -XPOST $B/experiments -H "$H" -d '{"name":"skills on vs off","config_ids":["hermes-skills@v1","hermes-noskills@v1"],"trials_per_task":10,
-  "task_ids":["arith-01","arith-02","code-01","code-02","code-03","code-04","date-01","file-01","file-02","file-03","judge-01","judge-02","logic-01","skill-01","skill-02","skill-03","skill-04","skill-05","text-01","hard-01","hard-02","hard-03","hard-04","hard-05"]}'
-```
-
-## Judge validation (run first)
-`python worker/judge_validation.py` → accuracy `TODO`, Cohen's kappa `TODO`, false passes `TODO`, false fails `TODO`.
+## Judge caveat
+The judge failed validation (see [JUDGE_VALIDATION.md](JUDGE_VALIDATION.md#validation-results-after-the-changes)). In
+this run, **20 of the 30 judge-graded trials** got "judge returned unparseable output" (qwen's thinking text instead
+of JSON), which counts as a fail. So `judge-01`, `judge-02` and `skill-05` mostly measure the judge, not the models.
+Results are therefore given with and without those 3 tasks. The verdict is the same either way.
 
 ## Results
-| Config | Pass rate | 95% CI | Avg cost / trial | Avg latency | Avg tokens | Errors |
-|--------|-----------|--------|------------------|-------------|------------|--------|
-| hermes-skills | TODO | TODO | TODO | TODO | TODO | TODO |
-| hermes-noskills | TODO | TODO | TODO | TODO | TODO | TODO |
 
-A − B = `TODO`, 95% CI `TODO`, bootstrap p ≈ `TODO` → verdict: `TODO`
+| Config | Pass rate | 95% CI | Avg cost / trial | Total cost | Avg latency | p90 latency | Avg tokens | LLM calls / trial | Errors |
+|--------|-----------|--------|------------------|------------|-------------|-------------|------------|-------------------|--------|
+| A: Llama 3.3 70B | 28.5% | 13.1% – 45.4% | $0.00020 | $0.0261 | 3.3 s | 6.9 s | 1,672 | 2.24 | 0 |
+| B: Ministral 8B | 35.4% | 20.0% – 53.1% | $0.00032 | $0.0419 | 3.5 s | 6.6 s | 2,150 | 2.55 | 0 |
 
-Per-task deltas (top rows of the compare table): `TODO`
+**A − B = −6.9 points, 95% CI [−23.1, +9.2], bootstrap p ≈ 0.41 → no significant difference.**
 
-Failure categories: `TODO` (expect `wrong_answer` on `skill-*` for no-skills)
+Without the 3 judge-graded tasks (23 tasks): A 27.8% [11.3, 47.0], B 37.4% [20.0, 55.7];
+A − B = −9.6 points, 95% CI [−27.8, +8.7], p ≈ 0.31 → **no significant difference**.
+
+**Per-task deltas** (tasks where the rates differ; the other 16 tasks are identical):
+
+| Task | A (Llama) | B (Ministral) | Delta | Label |
+|------|-----------|---------------|-------|-------|
+| code-01 | 0/5 | 5/5 | −1.0 | B better |
+| code-04 | 0/5 | 5/5 | −1.0 | B better |
+| skill-01 | 5/5 | 0/5 | +1.0 | A better |
+| arith-01 | 5/5 | 1/5 | +0.8 | A better |
+| code-03 | 2/5 | 5/5 | −0.6 | B better |
+| hard-01 | 0/5 | 3/5 | −0.6 | B better |
+| hard-03 | 0/5 | 3/5 | −0.6 | B better |
+| hard-04 | 0/5 | 1/5 | −0.2 | noise |
+| judge-02 | 1/5 | 0/5 | +0.2 | noise (judge) |
+| skill-05 | 3/5 | 2/5 | +0.2 | noise (judge) |
+
+The per-task CIs of 0/5-vs-5/5 rows collapse to a single point and overstate certainty (see STATISTICS.md); read
+this table as "where the difference comes from", not as per-task proof.
+
+**Failure categories:** A: `wrong_answer` 88, `step_exhaustion` 5. B: `wrong_answer` 81, `step_exhaustion` 2,
+`hallucinated_tool` 1. Both fail mostly with `wrong_answer`, which hides the real cause for A (next section).
 
 ## Inspected trajectories
-1. `skill-01`, no skills (trial link `TODO`): expected to guess an invoice ID format like `INV-2025-...`. → `TODO`
-2. `skill-01`, with skills: expected to call `skill_view(acme-billing)` and then answer `ACME-25-GLO-0007`. → `TODO`
-3. One surprise (a non-skill task that changed, or a skills trial that still failed) → `TODO`
+Links work while the platform runs locally: `http://localhost:3000/#/trials/<id>`.
+
+1. **`code-01`, Llama fails by describing instead of acting** (`33037e1d-4` vs Ministral `33037e1d-5`).
+   Llama's only reply is the text `write_file(path="solution.py", content="def is_palindrome...")`: a correct
+   function written as a tool call *in plain text*, not as a real tool call. No file is created, and the hidden
+   unit test fails with `No module named 'solution'`. Ministral makes a real `write_file` call and passes. All 5
+   Llama trials of `code-01` do this. On `code-04` and `hard-01` Llama does the same thing in another form: it
+   pastes the code into its answer instead of writing the file (`hard-01`: "revenue.json was not created").
+   Earlier trial `9022b24e-22` (`hard-02`) shows the same habit.
+2. **`skill-01`, Ministral reads the rule but applies it wrong** (`33037e1d-41` vs Llama `33037e1d-40`).
+   Both call `read_skill(acme-billing)`. The rule is a 3-letter customer code; Ministral answers
+   `ACME-25-GLOB-0007` (4 letters) in all 5 trials. Llama recovers from a broken first shell command, reads the
+   skill, builds the ID with `run_shell`, and answers `ACME-25-GLO-0007`.
+3. **`arith-01`, Ministral does mental arithmetic** (`33037e1d-1`). 09:40 → 13:15 is 215 minutes; Ministral
+   answers 255 without using a tool (4 of 5 trials wrong). Llama gets 5/5.
 
 ## Conclusion
-`TODO`, for example: "Skills improve pass rate by X points (CI [a, b]); the gain is entirely on skill-dependent tasks;
-cost per trial rises by Y%. On general tasks the difference is within noise."
+The hypothesis is **not supported**: the 70B model did not beat the 8B model. Ministral scored 6.9 points higher,
+but the 95% CI [−23.1, +9.2] includes 0, so at this power (26 tasks, N=5) the difference is noise.
+
+The two models fail in different ways, which the aggregate hides:
+- **Llama 3.3 70B often does not act.** On file-producing tasks it writes code, or even the tool call itself, as
+  chat text instead of calling the tool. That costs it `code-01`, `code-04`, `hard-01` and `hard-03`. This is a
+  tool-calling reliability problem (possibly provider-dependent, since routing was not pinned), not a reasoning problem.
+- **Ministral 8B acts, but is less precise:** a wrong invoice-ID format after reading the rule, and mental-arithmetic errors.
+
+Cost: Ministral costs **60% more per trial** ($0.00032 vs $0.00020). It uses 29% more tokens and has a higher input
+price. Latency is the same.
+
+Next steps: pin providers (`provider_routing`) so tool-calling behaviour is not provider luck; add a failure rule
+for "tool call written as text" (today it shows up as `wrong_answer`); run N=10 for a decision.
 
 ## Actual spend
-`TODO` (sum of total cost for both configs, plus judge cost from the CSV export)
+Models $0.0680 + judge $0.0025 = **$0.0705** for 260 trials (about $0.00027 per trial).
+
+## Not run: Hermes skills on vs off
+The originally planned experiment (Hermes + gpt-4o-mini, skills on vs off, 24 tasks, N=10, about $0.45) was not
+run for this submission. A first attempt (`e181b969`) was discarded after OpenRouter credits ran out mid-run; it
+exposed the provider-error and judge bugs described in JUDGE_VALIDATION.md.
