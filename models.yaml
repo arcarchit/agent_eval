@@ -2,7 +2,7 @@
 # Adding a model = adding an entry here. Prices are USD per 1M tokens; check them on
 # https://openrouter.ai/models before quoting costs (assumption: prices as of writing).
 judge_model: qwen3.5-9b  # model used by the llm_judge grader
-judge_votes: 5             # ask the judge 5 times, take the majority (temperature 0 is not deterministic)
+judge_votes: 1             # ask the judge N times, take the majority (temperature 0 is not deterministic)
 
 models:
   gpt-4o-mini:
