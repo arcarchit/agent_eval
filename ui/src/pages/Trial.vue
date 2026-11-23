@@ -2,7 +2,7 @@
      (messages, tool calls and results, memory reads/writes, skills used). -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { api, secs, usd } from '../api';
+import { api, FAILURE_HELP, secs, usd } from '../api';
 
 const props = defineProps<{ id: string }>();
 const t = ref<any>(null);
@@ -45,7 +45,8 @@ const color: Record<string, string> = {
       <div><strong>Grader:</strong> {{ t.task.grader.type }}
         <span class="muted" v-if="t.task.grader.expected">expected "{{ t.task.grader.expected }}"</span></div>
       <div v-if="t.grader"><strong>Grader reasoning:</strong> <pre>{{ t.grader.reasoning }}</pre></div>
-      <div v-if="t.failure_category"><strong>Failure category:</strong> <span class="fail">{{ t.failure_category }}</span></div>
+      <div v-if="t.failure_category"><strong>Failure category:</strong> <span class="fail">{{ t.failure_category }}</span>
+        <span class="muted"> · {{ FAILURE_HELP[t.failure_category] }}</span></div>
       <div v-if="t.error" class="error"><strong>Error:</strong> <pre>{{ t.error }}</pre></div>
       <div class="muted">
         Config: {{ t.config.harness }} / {{ t.config.model }} · skills: {{ t.config.skills.join(', ') || 'none' }} ·

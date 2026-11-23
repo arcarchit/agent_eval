@@ -2,7 +2,7 @@
      and a drill-down into individual trials. Refreshes every 3s while running. -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { api, pct, secs, usd } from '../api';
+import { api, FAILURE_HELP, pct, secs, usd } from '../api';
 
 const props = defineProps<{ id: string }>();
 const exp = ref<any>(null);
@@ -104,7 +104,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
         <td class="num">{{ Math.round(s.avg_tokens) || '–' }}</td>
         <td class="num">{{ num(s.avg_llm_calls) }}</td><td class="num">{{ num(s.avg_turns) }}</td>
         <td class="num">{{ s.trials_done }} / <span :class="{ warn: s.trials_error }">{{ s.trials_error }}</span> / {{ s.trials_cancelled }}</td>
-        <td><span v-for="(n, k) in s.failures" :key="k" style="margin-right: 8px">{{ k }}: {{ n }}</span></td>
+        <td><div v-for="(n, k) in s.failures" :key="k" :title="FAILURE_HELP[k]" style="cursor: help; white-space: nowrap">{{ k }}: {{ n }}</div></td>
         <td><button v-if="s.trials_pending" @click="stop(s.config_id)" style="background: var(--fail); font-size: 12px">Stop this config</button></td>
       </tr>
     </table>
@@ -183,7 +183,7 @@ const cellClass = (cell: any) => (!cell?.done ? 'muted' : cell.passed === cell.d
           <td><router-link :to="'/trials/' + t.id">#{{ t.trial_index }}</router-link></td>
           <td>{{ t.status }}</td>
           <td :class="t.passed ? 'pass' : 'fail'">{{ t.status === 'done' ? (t.passed ? 'pass' : 'fail') : '–' }}</td>
-          <td>{{ t.failure_category ?? '' }}<span class="error" v-if="t.error"> {{ t.error.slice(0, 120) }}</span></td>
+          <td :title="FAILURE_HELP[t.failure_category] ?? ''">{{ t.failure_category ?? '' }}<span class="error" v-if="t.error"> {{ t.error.slice(0, 120) }}</span></td>
           <td class="num">{{ usd(t.cost_usd) }}</td><td class="num">{{ secs(t.latency_ms) }}</td><td>{{ t.attempts }}</td>
         </tr>
       </table>

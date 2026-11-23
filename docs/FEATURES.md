@@ -54,8 +54,9 @@ agent better, worse, or the same, and how sure are we?"*
   "no significant difference" when the CI includes 0.
 - **Per-task deltas** with their own CIs, sorted by size.
 - **Cost, latency (mean, p90) and tokens** next to quality.
-- **Failure categories:** `timeout`, `provider_error`, `step_exhaustion`, `loop`, `hallucinated_tool`,
-  `bad_tool_args`, `tool_errors`, `gave_up`, `wrong_answer`.
+- **Failure categories:** `timeout`, `provider_error`, `step_exhaustion`, `loop`, `truncated`, `hallucinated_tool`,
+  `bad_tool_args`, `tool_errors`, `gave_up`, `wrong_answer`. Definitions in
+  [DESIGN.md §7](DESIGN.md#7-failure-analysis-workerfailurespy); also shown as tooltips in the UI.
 
 ### Observability
 - **Full trajectory per trial:** messages, tool calls with arguments and results, tool errors, memory reads and

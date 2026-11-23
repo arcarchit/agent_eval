@@ -146,8 +146,9 @@ Query (optional): `task`, `config`.
    "passed": 0, "score": 0, "failure_category": "wrong_answer", "attempts": 1,
    "input_tokens": 100, "output_tokens": 10, "cost_usd": 0.00012, "latency_ms": 492, "error": null }]
 ```
-`failure_category` is one of: `timeout`, `provider_error`, `step_exhaustion`, `loop`, `hallucinated_tool`,
-`bad_tool_args`, `tool_errors`, `gave_up`, `wrong_answer` (or `null` when the trial passed).
+`failure_category` is one of: `timeout`, `provider_error`, `step_exhaustion`, `loop`, `truncated`, `hallucinated_tool`,
+`bad_tool_args`, `tool_errors`, `gave_up`, `wrong_answer` (or `null` when the trial passed). Definitions:
+[DESIGN.md §7](DESIGN.md#7-failure-analysis-workerfailurespy).
 
 ## GET /experiments/:id/export
 Query: `format=json` (default) or `format=csv`. Downloaded as a file.
