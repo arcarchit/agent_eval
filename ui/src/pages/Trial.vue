@@ -20,14 +20,14 @@ function duration(idx: number | string): string {
 const stepKind: Record<string, string> = { assistant: 'model call', tool_result: 'tool', user: 'harness setup' };
 
 const label: Record<string, string> = {
-  session_start: 'NEW SESSION', user: 'USER', assistant: 'ASSISTANT', tool_call: 'TOOL CALL',
+  session_start: 'NEW SESSION', system: 'SYSTEM PROMPT', user: 'USER', assistant: 'ASSISTANT', tool_call: 'TOOL CALL',
   tool_result: 'TOOL RESULT', memory_read: 'MEMORY READ', memory_write: 'MEMORY WRITE', skill_used: 'SKILL USED',
   session_end: 'SESSION END',
 };
 const color: Record<string, string> = {
   user: 'var(--accent)', assistant: 'var(--fg)', tool_call: 'var(--warn)', tool_result: 'var(--muted)',
   memory_read: '#a855f7', memory_write: '#a855f7', skill_used: '#0891b2', session_start: 'var(--muted)',
-  session_end: 'var(--muted)',
+  session_end: 'var(--muted)', system: 'var(--muted)',
 };
 </script>
 
@@ -63,7 +63,9 @@ const color: Record<string, string> = {
         <span v-if="e.error" class="error"> · error</span>
         <span v-if="e.stop_reason" :class="e.stop_reason === 'completed' ? 'muted' : 'warn'"> · {{ e.stop_reason }}</span>
         <span v-if="duration(i)" class="muted" style="float: right">{{ stepKind[e.type] ?? 'after' }} {{ duration(i) }}</span>
-        <pre v-if="e.content">{{ e.content }}</pre>
+        <details v-if="e.type === 'system'"><summary class="muted">{{ e.content.length }} chars, click to show</summary>
+          <pre>{{ e.content }}</pre></details>
+        <pre v-else-if="e.content">{{ e.content }}</pre>
         <pre v-if="e.arguments" class="muted">{{ e.arguments }}</pre>
         <pre v-if="e.output">{{ e.output }}</pre>
       </div>

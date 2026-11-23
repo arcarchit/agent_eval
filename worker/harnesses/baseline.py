@@ -107,6 +107,7 @@ class BaselineHarness(Harness):
 
     def _session(self, client, model, config, system, message, tools: Tools, trace: Trace) -> str:
         messages = [{"role": "system", "content": system}, {"role": "user", "content": message}]
+        trace.add("system", content=system)
         trace.add("user", content=message)
         for _ in range(config.get("max_steps", 10)):
             resp = call_model(client, model, config.get("temperature", 0.0), messages=messages,

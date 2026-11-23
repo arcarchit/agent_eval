@@ -78,7 +78,7 @@ def get_model(name: str, spec: dict | None = None) -> Model:
 class Trace:
     """Everything that happened in one trial. Harness adapters fill this in.
 
-    Event types: session_start, user, assistant, tool_call, tool_result,
+    Event types: session_start, system (the system prompt sent), user, assistant, tool_call, tool_result,
     memory_read, memory_write, skill_used, session_end.
     """
     events: list = field(default_factory=list)

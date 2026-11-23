@@ -99,7 +99,7 @@ def test_baseline_tool_loop(tmp_path):
     assert trace.final_answer == "done"
     assert trace.input_tokens == 20 and trace.llm_calls() == 2
     assert [e["type"] for e in trace.events] == [
-        "session_start", "user", "assistant", "tool_call", "tool_result", "assistant", "session_end"]
+        "session_start", "system", "user", "assistant", "tool_call", "tool_result", "assistant", "session_end"]
 
 
 def test_baseline_blocks_path_escape(tmp_path):

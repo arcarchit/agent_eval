@@ -31,6 +31,7 @@ class HermesHarness(Harness):
         trace = Trace()
         for i, message in enumerate(sessions(task)):
             trace.add("session_start", index=i)
+            start_ts = trace.events[-1]["ts"]
             memory_file = hermes_home / "memories" / "MEMORY.md"
             if config.get("memory") and memory_file.exists():
                 # Hermes injects MEMORY.md into the system prompt at session start: that is the "read".
@@ -45,6 +46,9 @@ class HermesHarness(Harness):
             result = agent.run_conversation(message)
             self._raise_if_provider_failed(result, session=i)
 
+            # Hermes builds its system prompt inside run_conversation (identity, guidance, skills index,
+            # memory, environment). Recorded with session_start's timestamp so it shows no duration.
+            trace.add("system", ts=start_ts, content=getattr(agent, "_cached_system_prompt", None) or "(not available)")
             self._add_messages(trace, result.get("messages", []))
             trace.input_tokens += result.get("input_tokens") or 0
             trace.output_tokens += result.get("output_tokens") or 0
